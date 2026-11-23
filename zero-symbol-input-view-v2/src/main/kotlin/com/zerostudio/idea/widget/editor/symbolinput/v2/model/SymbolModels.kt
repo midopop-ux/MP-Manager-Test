@@ -52,8 +52,7 @@ package com.zerostudio.idea.widget.editor.symbolinput.v2.model
 data class SymbolGroup(
     val id: String,
     val title: String,
-    val symbols: List<SymbolEntry>,
-    val heightDp: Int? = null
+    val symbols: List<SymbolEntry>
 )
 
 data class SymbolEntry(

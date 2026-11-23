@@ -258,7 +258,6 @@ class SymbolDrawerView @JvmOverloads constructor(
             override fun onPageSelected(position: Int) {
                 if (suppressPageCallbacks) return
                 setIndicatorSelectedIndex(position)
-                recalculateGeometry()
                 requestLayout()
                 onGroupChangedListener?.invoke(position, groups.getOrNull(position))
                 val legacyGroup = legacyGroupAt(position)
@@ -998,11 +997,8 @@ class SymbolDrawerView @JvmOverloads constructor(
         } else {
             1
         }
-        val customHeightPx = currentGroup?.heightDp?.takeIf { it > 0 }?.let { (it * density).roundToInt() }
-        val naturalPageHeight = customHeightPx ?: DrawerGeometry.gridHeightPx(activeRows, config, resources.displayMetrics.density)
-        val activePagerHeight = if (customHeightPx != null) {
-            customHeightPx
-        } else if (expansion >= 0.5f) {
+        val naturalPageHeight = DrawerGeometry.gridHeightPx(activeRows, config, resources.displayMetrics.density)
+        val activePagerHeight = if (expansion >= 0.5f) {
             naturalPageHeight
         } else {
             minOf(pagerHeight, naturalPageHeight)
@@ -1109,18 +1105,9 @@ class SymbolDrawerView @JvmOverloads constructor(
             config = config,
             density = resources.displayMetrics.density
         )
-        val customHeightPx = groups.getOrNull(pager.currentItem)?.heightDp?.takeIf { it > 0 }?.let {
-            (it * resources.displayMetrics.density).roundToInt()
-        }
-        if (customHeightPx != null) {
-            collapsedHeight = customHeightPx
-            expandedGridHeight = customHeightPx
-            expandedHeight = customHeightPx
-        } else {
-            collapsedHeight = resolved.collapsedHeightPx
-            expandedGridHeight = resolved.expandedGridHeightPx
-            expandedHeight = resolved.expandedHeightPx
-        }
+        collapsedHeight = resolved.collapsedHeightPx
+        expandedGridHeight = resolved.expandedGridHeightPx
+        expandedHeight = resolved.expandedHeightPx
         val targetHeight = (collapsedHeight + (expandedHeight - collapsedHeight) * oldFraction).roundToInt()
         interactionController.setBounds(
             minimumHeightPx = collapsedHeight,

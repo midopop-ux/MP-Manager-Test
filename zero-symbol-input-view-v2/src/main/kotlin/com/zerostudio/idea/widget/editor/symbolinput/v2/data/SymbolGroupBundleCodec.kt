@@ -73,7 +73,6 @@ object SymbolGroupBundleCodec {
                     array.add(JsonObject().apply {
                         addProperty("id", group.id)
                         addProperty("title", group.title)
-                        group.heightDp?.let { addProperty("heightDp", it) }
                         add("symbols", JsonArray().also { symbols ->
                             group.symbols.forEach { symbol ->
                                 symbols.add(JsonObject().apply {
@@ -134,8 +133,7 @@ object SymbolGroupBundleCodec {
         val result = groupArray.map { groupElement ->
             require(groupElement.isJsonObject) { "Group entry must be an object" }
             val group = groupElement.asJsonObject
-            require(group.keySet().containsAll(setOf("id", "title", "symbols")) &&
-                group.keySet().all { it in setOf("id", "title", "symbols", "heightDp") }) {
+            require(group.keySet() == setOf("id", "title", "symbols")) {
                 "Group entry does not match the supported schema"
             }
             require(group.get("id").isJsonPrimitive && group.get("id").asJsonPrimitive.isString &&
@@ -143,7 +141,6 @@ object SymbolGroupBundleCodec {
                 group.get("symbols").isJsonArray) { "Group ID, title or symbols are invalid" }
             val symbols = group.getAsJsonArray("symbols")
             require(symbols.size() <= MAX_SYMBOLS_PER_GROUP) { "Too many symbols in group" }
-            val heightDp = group.get("heightDp")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asInt
             SymbolGroup(
                 id = group.get("id")?.asString ?: error("Group ID is missing"),
                 title = group.get("title")?.asString ?: error("Group title is missing"),
@@ -175,8 +172,7 @@ object SymbolGroupBundleCodec {
                         legacyLongActionId = symbol.get("legacyLongActionId")?.takeUnless { it.isJsonNull }?.asInt,
                         legacyLongText = symbol.get("legacyLongText")?.takeUnless { it.isJsonNull }?.asString
                     )
-                },
-                heightDp = heightDp
+                }
             )
         }
         validateGroups(result)
