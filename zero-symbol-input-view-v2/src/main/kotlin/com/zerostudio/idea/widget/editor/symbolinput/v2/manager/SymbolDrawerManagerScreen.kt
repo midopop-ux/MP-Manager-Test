@@ -48,6 +48,7 @@ package com.zerostudio.idea.widget.editor.symbolinput.v2.manager
 import com.zerostudio.idea.widget.editor.symbolinput.v2.R
 
 import android.content.Context
+import android.content.Intent
 import android.content.ClipData
 import android.text.Editable
 import android.text.TextWatcher
@@ -287,6 +288,8 @@ class SymbolDrawerManagerScreen(
     private val undoMessage = TextView(context)
     private val undoButton = managerTextButton(context)
     private var pendingUndo: (() -> Unit)? = null
+    private var heightValueButton: MaterialButton? = null
+    private var heightContainer: LinearLayout? = null
 
     init {
         orientation = LinearLayout.VERTICAL
@@ -500,6 +503,58 @@ class SymbolDrawerManagerScreen(
 
     private fun buildHeader() {
         val row = horizontalRow().apply { gravity = android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL }
+        val heightBox = managerOutlinedButton(context).apply {
+            tag = "symbol_manager_height_box"
+            isAllCaps = false
+            textSize = 13f
+            minWidth = dp(44)
+            minHeight = dp(40)
+            insetTop = 0
+            insetBottom = 0
+            setPadding(dp(8), 0, dp(8), 0)
+            contentDescription = context.getString(R.string.symbol_drawer_group_height)
+            setOnClickListener { promptGroupHeight() }
+        }
+        this.heightValueButton = heightBox
+
+        val upButton = managerOutlinedButton(context).apply {
+            tag = "symbol_manager_height_up"
+            text = "▲"
+            textSize = 11f
+            minWidth = dp(32)
+            minHeight = dp(40)
+            insetTop = 0
+            insetBottom = 0
+            setPadding(0, 0, 0, 0)
+            setOnClickListener { adjustGroupHeight(4) }
+        }
+
+        val downButton = managerOutlinedButton(context).apply {
+            tag = "symbol_manager_height_down"
+            text = "▼"
+            textSize = 11f
+            minWidth = dp(32)
+            minHeight = dp(40)
+            insetTop = 0
+            insetBottom = 0
+            setPadding(0, 0, 0, 0)
+            setOnClickListener { adjustGroupHeight(-4) }
+        }
+
+        val heightRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            val params = LayoutParams(LayoutParams.WRAP_CONTENT, dp(40)).apply {
+                marginEnd = dp(8)
+            }
+            layoutParams = params
+            addView(heightBox, LayoutParams(LayoutParams.WRAP_CONTENT, dp(40)))
+            addView(upButton, LayoutParams(dp(32), dp(40)).apply { marginStart = dp(2) })
+            addView(downButton, LayoutParams(dp(32), dp(40)).apply { marginStart = dp(2) })
+        }
+        this.heightContainer = heightRow
+        row.addView(heightRow)
+
         val searchButton = managerOutlinedButton(context).apply {
             text = context.getString(R.string.symbol_drawer_132)
             contentDescription = context.getString(R.string.symbol_drawer_134)
@@ -655,6 +710,7 @@ class SymbolDrawerManagerScreen(
                 val id = tab.tag as? String ?: return
                 selectedGroupId = id
                 groupPageHost.selectPage(groupPageId(id))
+                updateHeightControl()
             }
             override fun onTabUnselected(tab: TabLayout.Tab) = Unit
             override fun onTabReselected(tab: TabLayout.Tab) = Unit
@@ -1400,6 +1456,68 @@ class SymbolDrawerManagerScreen(
         emptyView.visibility = if (symbols.isEmpty()) View.VISIBLE else View.GONE
         selectedSymbolIds.retainAll(group?.symbols?.mapTo(mutableSetOf()) { it.id }.orEmpty())
         updateBatchSummary()
+        updateHeightControl()
+    }
+
+    private fun updateHeightControl() {
+        val group = currentGroup()
+        val density = resources.displayMetrics.density.coerceAtLeast(0.1f)
+        val defaultDp = (DrawerGeometry.collapsedHeightPx(settings.toDrawerConfig(), density) / density).let { kotlin.math.round(it).toInt() }
+        val currentDp = group?.heightDp ?: defaultDp
+        heightValueButton?.text = currentDp.toString()
+    }
+
+    private fun promptGroupHeight() {
+        val groupId = selectedGroupId ?: return
+        val group = manager.groups.firstOrNull { it.id == groupId } ?: return
+        val density = resources.displayMetrics.density.coerceAtLeast(0.1f)
+        val defaultDp = (DrawerGeometry.collapsedHeightPx(settings.toDrawerConfig(), density) / density).let { kotlin.math.round(it).toInt() }
+        val currentDp = group.heightDp ?: defaultDp
+
+        val input = TextInputEditText(context).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(currentDp.toString())
+            setSelection(text?.length ?: 0)
+        }
+        val layout = TextInputLayout(context).apply {
+            hint = context.getString(R.string.symbol_drawer_group_height)
+            addView(input)
+            setPadding(dp(20), dp(10), dp(20), dp(10))
+        }
+
+        MaterialAlertDialogBuilder(context)
+            .setTitle(context.getString(R.string.symbol_drawer_group_height))
+            .setView(layout)
+            .setPositiveButton(context.getString(R.string.symbol_drawer_178)) { _, _ ->
+                val entered = input.text?.toString()?.toIntOrNull()
+                if (entered != null && entered in 20..600) {
+                    manager.updateGroupHeight(groupId, entered)
+                    updateHeightControl()
+                    liveDrawer?.submitGroups(manager.groups, preserveSelectedGroup = true)
+                    onGroupsChanged?.invoke(manager.groups)
+                }
+            }
+            .setNeutralButton(context.getString(R.string.symbol_drawer_150)) { _, _ ->
+                manager.updateGroupHeight(groupId, null)
+                updateHeightControl()
+                liveDrawer?.submitGroups(manager.groups, preserveSelectedGroup = true)
+                onGroupsChanged?.invoke(manager.groups)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun adjustGroupHeight(delta: Int) {
+        val groupId = selectedGroupId ?: return
+        val group = manager.groups.firstOrNull { it.id == groupId } ?: return
+        val density = resources.displayMetrics.density.coerceAtLeast(0.1f)
+        val defaultDp = (DrawerGeometry.collapsedHeightPx(settings.toDrawerConfig(), density) / density).let { kotlin.math.round(it).toInt() }
+        val currentDp = group.heightDp ?: defaultDp
+        val newDp = (currentDp + delta).coerceIn(20, 600)
+        manager.updateGroupHeight(groupId, newDp)
+        updateHeightControl()
+        liveDrawer?.submitGroups(manager.groups, preserveSelectedGroup = true)
+        onGroupsChanged?.invoke(manager.groups)
     }
 
     private fun currentGroup(): SymbolGroup? =

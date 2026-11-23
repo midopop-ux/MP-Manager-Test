@@ -111,6 +111,16 @@ class SymbolGroupManager(
         commit(groups.map { if (it.id == groupId) it.copy(title = title.trim()) else it })
     }
 
+    fun updateGroupHeight(groupId: String, heightDp: Int?): SymbolGroup? {
+        val index = groups.indexOfFirst { it.id == groupId }
+        if (index < 0) return null
+        val safeHeight = heightDp?.coerceIn(20, 600)
+        val updated = groups[index].copy(heightDp = safeHeight)
+        val next = groups.toMutableList().apply { set(index, updated) }
+        commit(next)
+        return updated
+    }
+
     fun removeGroup(groupId: String) {
         // UI commands may outlive a stale selection (for example after an
         // external reload). Treat removal of an already-missing group as an

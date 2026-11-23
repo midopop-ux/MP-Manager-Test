@@ -155,6 +155,7 @@
     <string name="symbol_drawer_154">Display text</string>
     <string name="symbol_drawer_155">Show symbol labels</string>
     <string name="symbol_drawer_156">More</string>
+    <string name="symbol_drawer_group_height">List height (dp)</string>
     <string name="symbol_drawer_157">Maximum expanded height (dp)</string>
     <string name="symbol_drawer_158">Minimum touch target (dp)</string>
     <string name="symbol_drawer_159">Recent</string>

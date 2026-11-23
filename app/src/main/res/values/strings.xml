@@ -1947,6 +1947,7 @@ Strings are sent to the external service you configured.</string>
     <string name="edpref_import_syntax_summary">Import custom syntax highlighting definitions</string>
     <string name="edpref_bottom_bar">Manage Bottom Bar Buttons</string>
     <string name="edpref_bottom_bar_summary">Configure actions shown on the editor\'s bottom bar</string>
+    <string name="symbol_drawer_group_height">List height (dp)</string>
     <string name="edpref_floating_menus">Edit Floating Menus</string>
     <string name="edpref_floating_menus_summary">Customize the floating text action menu items</string>
     <string name="edpref_ai_category">AI Preference (Gemini AI)</string>

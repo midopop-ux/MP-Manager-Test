@@ -1667,6 +1667,7 @@
     <string name="edpref_import_syntax_summary">استيراد تعريفات مخصصة لتمييز بناء الجملة</string>
     <string name="edpref_bottom_bar">إدارة أزرار الشريط السفلي</string>
     <string name="edpref_bottom_bar_summary">تكوين الإجراءات الموضحة على الشريط السفلي للمحرر</string>
+    <string name="symbol_drawer_group_height">ارتفاع القائمة (dp)</string>
     <string name="edpref_floating_menus">تعديل القوائم العائمة</string>
     <string name="edpref_floating_menus_summary">تخصيص عناصر قائمة إجراءات النص العائمة</string>
     <string name="edpref_ai_category">تفضيل الذكاء الاصطناعي (Gemini AI)</string>
