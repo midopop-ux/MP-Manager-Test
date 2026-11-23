@@ -49,6 +49,7 @@ import com.zerostudio.idea.widget.editor.symbolinput.v2.R
 
 import android.content.Context
 import android.content.Intent
+import com.zerostudio.idea.widget.editor.symbolinput.v2.state.DrawerGeometry
 import android.content.ClipData
 import android.text.Editable
 import android.text.TextWatcher
