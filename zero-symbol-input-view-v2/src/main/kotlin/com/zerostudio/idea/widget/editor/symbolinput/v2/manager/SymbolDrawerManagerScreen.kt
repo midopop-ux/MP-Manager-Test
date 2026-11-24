@@ -293,7 +293,7 @@ class SymbolDrawerManagerScreen(
         setPadding(dp(12), dp(12), dp(12), dp(12))
         background = roundedSurface(surfaceColor(), 18)
         if (manager.groups.isEmpty()) {
-            manager.replaceAll(SymbolDrawerDefaults.createGroups(context))
+            manager.replaceAll(SymbolDrawerDefaults.createDefaultGroups(context))
         }
         buildHeader()
         buildGroupControls()
