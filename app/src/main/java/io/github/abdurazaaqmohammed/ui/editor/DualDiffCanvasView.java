@@ -6,6 +6,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Typeface;
 import android.util.AttributeSet;
+import android.util.LruCache;
 import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -17,6 +18,7 @@ import androidx.annotation.Nullable;
 
 import com.github.difflib.text.DiffRow;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -28,12 +30,14 @@ import io.github.abdurazaaqmohammed.util.text.TextDiffEngine;
  * renders only visible wrapped lines directly on Canvas without blank spacer
  * rows, synchronizes matching blocks smoothly, draws cubic Bezier ribbons
  * in a wide center gutter, differentiates CHANGE/DELETE/INSERT colors,
- * highlights the active jumped hunk, and renders a side diff minimap scrollbar.
+ * highlights inline character differences lazily, highlights the active jumped
+ * hunk, and renders a side diff minimap scrollbar.
  */
 public class DualDiffCanvasView extends View {
 
     private static final int MAX_RENDERED_CHARS_PER_LINE = 4096;
     private static final int MINIMAP_BUCKETS = 360;
+    private static final int MAX_INLINE_DP_LEN = 256;
 
     public static final class PaneLine {
         public final String text;
@@ -45,17 +49,31 @@ public class DualDiffCanvasView extends View {
         }
     }
 
+    private static final class InlineSpans {
+        final int[] leftRanges;
+        final int[] rightRanges;
+
+        InlineSpans(int[] leftRanges, int[] rightRanges) {
+            this.leftRanges = leftRanges;
+            this.rightRanges = rightRanges;
+        }
+    }
+
     private List<PaneLine> leftLines = Collections.emptyList();
     private List<PaneLine> rightLines = Collections.emptyList();
     private List<TextDiffEngine.DiffHunk> hunks = Collections.emptyList();
 
     private int[] leftLineStartRow = new int[]{0};
     private int[] rightLineStartRow = new int[]{0};
+    private int[] pairedRightForLeft = new int[0];
+    private int[] pairedLeftForRight = new int[0];
     private int[] hunkScrollStartRow = new int[]{0};
     private int[] hunkLeftStartRow = new int[0];
     private int[] hunkLeftEndRow = new int[0];
     private int[] hunkRightStartRow = new int[0];
     private int[] hunkRightEndRow = new int[0];
+
+    private final LruCache<Long, InlineSpans> inlineDiffCache = new LruCache<>(256);
 
     /** Precomputed bucket colors for O(1) minimap drawing on huge files. */
     private final int[] minimapBuckets = new int[MINIMAP_BUCKETS];
@@ -85,6 +103,7 @@ public class DualDiffCanvasView extends View {
     private final Paint equalBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint changeBlockPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint changeBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint inlineDiffPaint = new Paint();
     private final Paint deleteBlockPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint deleteBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint insertBlockPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -184,6 +203,7 @@ public class DualDiffCanvasView extends View {
 
             changeBlockPaint.setColor(0xFF26486B);
             changeBorderPaint.setColor(0xFF3F74AA);
+            inlineDiffPaint.setColor(0xFF3E78B5);
             deleteBlockPaint.setColor(0xFF59252A);
             deleteBorderPaint.setColor(0xFFA8424B);
             insertBlockPaint.setColor(0xFF204D36);
@@ -210,6 +230,7 @@ public class DualDiffCanvasView extends View {
 
             changeBlockPaint.setColor(0xFFD6E6F5);
             changeBorderPaint.setColor(0xFF6BA3D6);
+            inlineDiffPaint.setColor(0xFF9AC4EC);
             deleteBlockPaint.setColor(0xFFFADAD8);
             deleteBorderPaint.setColor(0xFFD96B68);
             insertBlockPaint.setColor(0xFFD4F2DC);
@@ -245,6 +266,7 @@ public class DualDiffCanvasView extends View {
         this.hunks = diffHunks != null ? diffHunks : Collections.emptyList();
         this.highlightedHunkIndex = -1;
         this.scrollY = 0f;
+        inlineDiffCache.evictAll();
         scroller.forceFinished(true);
         rebuildLayoutTables();
         invalidate();
@@ -357,6 +379,24 @@ public class DualDiffCanvasView extends View {
         }
         hunkScrollStartRow[hCount] = trackAcc;
         totalTrackRows = trackAcc;
+
+        pairedRightForLeft = new int[leftLines.size()];
+        pairedLeftForRight = new int[rightLines.size()];
+        Arrays.fill(pairedRightForLeft, -1);
+        Arrays.fill(pairedLeftForRight, -1);
+        for (int i = 0; i < hCount; i++) {
+            TextDiffEngine.DiffHunk hunk = hunks.get(i);
+            if (hunk.tag != DiffRow.Tag.CHANGE) continue;
+            int common = Math.min(hunk.leftEnd - hunk.leftStart, hunk.rightEnd - hunk.rightStart);
+            for (int k = 0; k < common; k++) {
+                int lIdx = hunk.leftStart + k;
+                int rIdx = hunk.rightStart + k;
+                if (lIdx < pairedRightForLeft.length && rIdx < pairedLeftForRight.length) {
+                    pairedRightForLeft[lIdx] = rIdx;
+                    pairedLeftForRight[rIdx] = lIdx;
+                }
+            }
+        }
 
         Arrays.fill(minimapBuckets, 0);
         if (totalTrackRows > 0) {
@@ -541,7 +581,7 @@ public class DualDiffCanvasView extends View {
         // 3. Left pane text & line numbers
         canvas.save();
         canvas.clipRect(0, 0, leftPaneEnd, h);
-        drawPaneLines(canvas, leftLines, leftLineStartRow, leftScrollY, panePaddingH, h);
+        drawPaneLines(canvas, leftLines, leftLineStartRow, leftScrollY, panePaddingH, h, true);
         canvas.restore();
         drawPaneNumbers(canvas, leftLines, leftLineStartRow, leftScrollY,
                 leftPaneEnd + numColWidth - panePaddingH, h, true);
@@ -549,7 +589,7 @@ public class DualDiffCanvasView extends View {
         // 4. Right pane text & line numbers
         canvas.save();
         canvas.clipRect(rightPaneStart, 0, contentRight, h);
-        drawPaneLines(canvas, rightLines, rightLineStartRow, rightScrollY, rightPaneStart + panePaddingH, h);
+        drawPaneLines(canvas, rightLines, rightLineStartRow, rightScrollY, rightPaneStart + panePaddingH, h, false);
         canvas.restore();
         drawPaneNumbers(canvas, rightLines, rightLineStartRow, rightScrollY,
                 rightPaneStart - numColWidth + panePaddingH, h, false);
@@ -606,7 +646,7 @@ public class DualDiffCanvasView extends View {
     }
 
     private void drawPaneLines(Canvas canvas, List<PaneLine> lines, int[] startRows,
-                               float paneScrollY, float textX, int viewHeight) {
+                               float paneScrollY, float textX, int viewHeight, boolean isLeft) {
         if (lines.isEmpty()) return;
         int totalRows = startRows[lines.size()];
         int firstRow = Math.max(0, (int) Math.floor(paneScrollY / rowHeight));
@@ -617,10 +657,18 @@ public class DualDiffCanvasView extends View {
         String queryLower = searchQuery.isEmpty() ? "" : (searchMatchCase ? searchQuery : searchQuery.toLowerCase());
         float charW = textPaint.measureText("M");
 
+        int cachedLineIdx = -1;
+        int[] cachedRanges = null;
+
         for (int row = firstRow; row <= lastRow; row++) {
             while (lineIdx + 1 < lines.size() && startRows[lineIdx + 1] <= row) {
                 lineIdx++;
             }
+            if (lineIdx != cachedLineIdx) {
+                cachedLineIdx = lineIdx;
+                cachedRanges = getInlineRangesForLine(lineIdx, isLeft);
+            }
+
             PaneLine line = lines.get(lineIdx);
             int rowInLine = row - startRows[lineIdx];
             int sliceStart = rowInLine * charsPerLine;
@@ -629,6 +677,22 @@ public class DualDiffCanvasView extends View {
             int sliceEnd = Math.min(maxLen, sliceStart + charsPerLine);
 
             float y = row * rowHeight - paneScrollY;
+
+            if (cachedRanges != null) {
+                for (int r = 0; r < cachedRanges.length; r += 2) {
+                    int rStart = cachedRanges[r];
+                    int rEnd = cachedRanges[r + 1];
+                    if (rEnd <= sliceStart) continue;
+                    if (rStart >= sliceEnd) break;
+                    int drawStart = Math.max(sliceStart, rStart) - sliceStart;
+                    int drawEnd = Math.min(sliceEnd, rEnd) - sliceStart;
+                    if (drawEnd > drawStart) {
+                        canvas.drawRect(textX + drawStart * charW, y,
+                                textX + drawEnd * charW, y + rowHeight, inlineDiffPaint);
+                    }
+                }
+            }
+
             if (!queryLower.isEmpty()) {
                 String slice = line.text.substring(sliceStart, sliceEnd);
                 String hay = searchMatchCase ? slice : slice.toLowerCase();
@@ -642,6 +706,116 @@ public class DualDiffCanvasView extends View {
             }
             canvas.drawText(line.text, sliceStart, sliceEnd, textX, y + textBaselineOffset, textPaint);
         }
+    }
+
+    @Nullable
+    private int[] getInlineRangesForLine(int lineIdx, boolean isLeft) {
+        int leftIdx;
+        int rightIdx;
+        if (isLeft) {
+            if (lineIdx < 0 || lineIdx >= pairedRightForLeft.length) return null;
+            rightIdx = pairedRightForLeft[lineIdx];
+            if (rightIdx < 0) return null;
+            leftIdx = lineIdx;
+        } else {
+            if (lineIdx < 0 || lineIdx >= pairedLeftForRight.length) return null;
+            leftIdx = pairedLeftForRight[lineIdx];
+            if (leftIdx < 0) return null;
+            rightIdx = lineIdx;
+        }
+        long key = (((long) leftIdx) << 32) | (rightIdx & 0xFFFFFFFFL);
+        InlineSpans spans = inlineDiffCache.get(key);
+        if (spans == null) {
+            spans = computeInlineSpans(leftLines.get(leftIdx).text, rightLines.get(rightIdx).text);
+            inlineDiffCache.put(key, spans);
+        }
+        return isLeft ? spans.leftRanges : spans.rightRanges;
+    }
+
+    private static InlineSpans computeInlineSpans(String left, String right) {
+        int len1 = Math.min(left.length(), MAX_RENDERED_CHARS_PER_LINE);
+        int len2 = Math.min(right.length(), MAX_RENDERED_CHARS_PER_LINE);
+
+        int prefix = 0;
+        int minLen = Math.min(len1, len2);
+        while (prefix < minLen && left.charAt(prefix) == right.charAt(prefix)) {
+            prefix++;
+        }
+
+        int suffix = 0;
+        int maxSuffix = minLen - prefix;
+        while (suffix < maxSuffix && left.charAt(len1 - 1 - suffix) == right.charAt(len2 - 1 - suffix)) {
+            suffix++;
+        }
+
+        int mid1 = len1 - prefix - suffix;
+        int mid2 = len2 - prefix - suffix;
+        if (mid1 <= 0 && mid2 <= 0) {
+            return new InlineSpans(new int[0], new int[0]);
+        }
+        if (mid1 == 0) {
+            return new InlineSpans(new int[0], new int[]{prefix, len2 - suffix});
+        }
+        if (mid2 == 0) {
+            return new InlineSpans(new int[]{prefix, len1 - suffix}, new int[0]);
+        }
+        if (mid1 > MAX_INLINE_DP_LEN || mid2 > MAX_INLINE_DP_LEN) {
+            return new InlineSpans(new int[]{prefix, len1 - suffix}, new int[]{prefix, len2 - suffix});
+        }
+
+        // Exact char-level LCS inside the small differing middle region.
+        short[][] dp = new short[mid1 + 1][mid2 + 1];
+        for (int i = mid1 - 1; i >= 0; i--) {
+            char c1 = left.charAt(prefix + i);
+            for (int j = mid2 - 1; j >= 0; j--) {
+                if (c1 == right.charAt(prefix + j)) {
+                    dp[i][j] = (short) (dp[i + 1][j + 1] + 1);
+                } else {
+                    dp[i][j] = dp[i + 1][j] >= dp[i][j + 1] ? dp[i + 1][j] : dp[i][j + 1];
+                }
+            }
+        }
+
+        boolean[] matchedLeft = new boolean[mid1];
+        boolean[] matchedRight = new boolean[mid2];
+        int i = 0, j = 0;
+        while (i < mid1 && j < mid2) {
+            if (left.charAt(prefix + i) == right.charAt(prefix + j)) {
+                matchedLeft[i] = true;
+                matchedRight[j] = true;
+                i++;
+                j++;
+            } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+                i++;
+            } else {
+                j++;
+            }
+        }
+
+        return new InlineSpans(
+                collectUnmatchedRanges(matchedLeft, prefix),
+                collectUnmatchedRanges(matchedRight, prefix)
+        );
+    }
+
+    private static int[] collectUnmatchedRanges(boolean[] matched, int offset) {
+        List<Integer> ranges = new ArrayList<>();
+        int i = 0;
+        int n = matched.length;
+        while (i < n) {
+            if (matched[i]) {
+                i++;
+                continue;
+            }
+            int start = offset + i;
+            while (i < n && !matched[i]) i++;
+            int end = offset + i;
+            ranges.add(start);
+            ranges.add(end);
+        }
+        int[] out = new int[ranges.size()];
+        for (int k = 0; k < ranges.size(); k++) out[k] = ranges.get(k);
+        return out;
     }
 
     private void drawPaneNumbers(Canvas canvas, List<PaneLine> lines, int[] startRows,
