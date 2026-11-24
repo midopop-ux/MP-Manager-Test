@@ -217,14 +217,12 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
     private static boolean syntaxGrammarsLoaded = false;
     private static final String[] SYNTAX_LABELS = {
             "Plain Text", "XML", "AXML", "Java", "C", "C++", "Python", "JavaScript",
-            "HTML", "CSS", "Markdown", "JSON", "Rust", "Shell", "Prop",
-            "Office Document", "Office Spreadsheet", "Office Presentation"
+            "HTML", "CSS", "Markdown", "JSON", "Rust", "Shell", "Prop"
     };
     private static final String[] SYNTAX_SCOPES = {
             null, "text.xml", "text.xml", "source.java", "source.c", "source.cpp", "source.python",
             "source.js", "text.html.basic", "source.css", "text.html.markdown", "source.json",
-            "source.rust", "source.shell", "source.prop",
-            "text.office.document", "text.office.spreadsheet", "text.office.presentation"
+            "source.rust", "source.shell", "source.prop"
     };
 
     public interface EditorCallback {
@@ -1626,13 +1624,6 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
         }
         int q = n.indexOf('?');
         if (q >= 0) n = n.substring(0, q);
-        String logical = io.github.abdurazaaqmohammed.util.text.MimeUtil.logicalDisplayName(n);
-        if (logical != null) n = logical.toLowerCase(Locale.ROOT);
-        io.github.abdurazaaqmohammed.util.text.OfficeDocumentParser.Kind officeKind =
-                io.github.abdurazaaqmohammed.util.text.OfficeDocumentParser.kindFromName(n);
-        if (officeKind != io.github.abdurazaaqmohammed.util.text.OfficeDocumentParser.Kind.NONE) {
-            return io.github.abdurazaaqmohammed.util.text.OfficeDocumentParser.scopeForKind(officeKind);
-        }
         int dot = n.lastIndexOf('.');
         if (dot < 0 || dot == n.length() - 1) return null;
         switch (n.substring(dot + 1)) {
@@ -1694,8 +1685,6 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
             case "idc":
             case "te":
             case "rc": return "source.prop";
-            case "csv":
-            case "tsv": return "text.office.spreadsheet";
             default: return null;
         }
     }
