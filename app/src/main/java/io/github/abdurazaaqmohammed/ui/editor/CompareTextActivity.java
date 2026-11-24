@@ -488,6 +488,7 @@ public class CompareTextActivity extends BaseActivity {
             if (diffHunkIndices.isEmpty()) return;
             currentDiffHunkCursor = (currentDiffHunkCursor + 1) % diffHunkIndices.size();
             diffCanvasView.scrollToHunk(diffHunkIndices.get(currentDiffHunkCursor));
+            updateDiffCounterSubtitle();
             return;
         }
         if (diffPositions.isEmpty()) return;
@@ -509,6 +510,7 @@ public class CompareTextActivity extends BaseActivity {
                     ? diffHunkIndices.size() - 1
                     : currentDiffHunkCursor - 1;
             diffCanvasView.scrollToHunk(diffHunkIndices.get(currentDiffHunkCursor));
+            updateDiffCounterSubtitle();
             return;
         }
         if (diffPositions.isEmpty()) return;
@@ -521,6 +523,17 @@ public class CompareTextActivity extends BaseActivity {
             }
         }
         scrollToDiffLine(diffPositions.get(diffPositions.size() - 1));
+    }
+
+    private void updateDiffCounterSubtitle() {
+        ActionBar bar = getSupportActionBar();
+        if (bar == null) return;
+        String base = (names2 != null && !names2.isEmpty()) ? (names1 + " ⟷ " + names2) : names1;
+        if (currentDiffHunkCursor >= 0 && !diffHunkIndices.isEmpty()) {
+            bar.setSubtitle("[" + (currentDiffHunkCursor + 1) + "/" + diffHunkIndices.size() + "]  " + base);
+        } else {
+            bar.setSubtitle(base);
+        }
     }
 
     private int firstVisibleDiffLine() {
