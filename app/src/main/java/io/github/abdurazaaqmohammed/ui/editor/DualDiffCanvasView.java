@@ -44,9 +44,57 @@ public class DualDiffCanvasView extends View {
         public final int lineNumber;
 
         public PaneLine(String text, int lineNumber) {
-            this.text = text != null ? text : "";
+            this.text = sanitizeDisplayText(text);
             this.lineNumber = lineNumber;
         }
+    }
+
+    /**
+     * Replaces NUL and control characters that Skia either ignores (creating huge
+     * invisible wrapped blocks on binary files) or renders poorly, while collapsing
+     * long NUL runs so binary headers remain readable next to diffs.
+     */
+    static String sanitizeDisplayText(String raw) {
+        if (raw == null || raw.isEmpty()) return "";
+        int len = Math.min(raw.length(), MAX_RENDERED_CHARS_PER_LINE);
+        boolean needsChange = raw.length() > MAX_RENDERED_CHARS_PER_LINE;
+        if (!needsChange) {
+            for (int i = 0; i < len; i++) {
+                char c = raw.charAt(i);
+                if (c < 0x20 || c == 0x7F) {
+                    needsChange = true;
+                    break;
+                }
+            }
+        }
+        if (!needsChange) return raw;
+
+        StringBuilder sb = new StringBuilder(Math.min(len, 512));
+        int i = 0;
+        while (i < len) {
+            char c = raw.charAt(i);
+            if (c == '\0') {
+                int j = i + 1;
+                while (j < len && raw.charAt(j) == '\0') j++;
+                int count = j - i;
+                if (count >= 16) {
+                    sb.append("[00×").append(count).append(']');
+                } else {
+                    for (int k = 0; k < count; k++) sb.append('\uFFFD');
+                }
+                i = j;
+                continue;
+            }
+            if (c == '\t') {
+                sb.append("  ");
+            } else if (c < 0x20 || c == 0x7F) {
+                sb.append('\uFFFD');
+            } else {
+                sb.append(c);
+            }
+            i++;
+        }
+        return sb.toString();
     }
 
     private static final class InlineSpans {
@@ -89,8 +137,17 @@ public class DualDiffCanvasView extends View {
     private float minimapWidth;
     private float activeAccentBarWidth;
 
+    private boolean wordWrap = true;
     private float scrollY = 0f;
     private float maxScrollY = 0f;
+    private float leftScrollX = 0f;
+    private float rightScrollX = 0f;
+    private float maxLeftScrollX = 0f;
+    private float maxRightScrollX = 0f;
+    private int maxLeftLineChars = 0;
+    private int maxRightLineChars = 0;
+    private boolean activeTouchLeftPane = true;
+    private boolean flingLeftPane = true;
 
     private int highlightedHunkIndex = -1;
     private String searchQuery = "";
@@ -142,13 +199,22 @@ public class DualDiffCanvasView extends View {
             @Override
             public boolean onDown(@NonNull MotionEvent e) {
                 scroller.forceFinished(true);
+                float centerX = (getWidth() - minimapWidth) * 0.5f;
+                activeTouchLeftPane = e.getX() <= centerX;
                 return true;
             }
 
             @Override
             public boolean onScroll(@Nullable MotionEvent e1, @NonNull MotionEvent e2, float distanceX, float distanceY) {
                 if (!draggingMinimap) {
-                    scrollByY(distanceY);
+                    if (!wordWrap && Math.abs(distanceX) > Math.abs(distanceY) * 1.15f) {
+                        scrollPaneX(activeTouchLeftPane, distanceX);
+                    } else if (!wordWrap && Math.abs(distanceY) <= Math.abs(distanceX) * 1.15f) {
+                        scrollPaneX(activeTouchLeftPane, distanceX);
+                        scrollByY(distanceY);
+                    } else {
+                        scrollByY(distanceY);
+                    }
                 }
                 return true;
             }
@@ -156,7 +222,18 @@ public class DualDiffCanvasView extends View {
             @Override
             public boolean onFling(@Nullable MotionEvent e1, @NonNull MotionEvent e2, float velocityX, float velocityY) {
                 if (!draggingMinimap) {
-                    scroller.fling(0, (int) scrollY, 0, (int) -velocityY, 0, 0, 0, (int) Math.max(0f, maxScrollY));
+                    if (!wordWrap) {
+                        flingLeftPane = activeTouchLeftPane;
+                        float curX = flingLeftPane ? leftScrollX : rightScrollX;
+                        float maxX = flingLeftPane ? maxLeftScrollX : maxRightScrollX;
+                        float vx = Math.abs(velocityX) > Math.abs(velocityY) * 0.65f ? -velocityX : 0f;
+                        float vy = Math.abs(velocityY) > Math.abs(velocityX) * 0.65f ? -velocityY : 0f;
+                        scroller.fling((int) curX, (int) scrollY, (int) vx, (int) vy,
+                                0, (int) Math.max(0f, maxX), 0, (int) Math.max(0f, maxScrollY));
+                    } else {
+                        scroller.fling(0, (int) scrollY, 0, (int) -velocityY,
+                                0, 0, 0, (int) Math.max(0f, maxScrollY));
+                    }
                     postInvalidateOnAnimation();
                 }
                 return true;
@@ -260,16 +337,43 @@ public class DualDiffCanvasView extends View {
         dividerPaint.setStrokeWidth(1f);
     }
 
+    public void setWordWrap(boolean wordWrap) {
+        if (this.wordWrap == wordWrap) return;
+        this.wordWrap = wordWrap;
+        this.leftScrollX = 0f;
+        this.rightScrollX = 0f;
+        scroller.forceFinished(true);
+        rebuildLayoutTables();
+        invalidate();
+    }
+
+    public boolean isWordWrap() {
+        return wordWrap;
+    }
+
     public void setData(List<PaneLine> left, List<PaneLine> right, List<TextDiffEngine.DiffHunk> diffHunks) {
         this.leftLines = left != null ? left : Collections.emptyList();
         this.rightLines = right != null ? right : Collections.emptyList();
         this.hunks = diffHunks != null ? diffHunks : Collections.emptyList();
         this.highlightedHunkIndex = -1;
         this.scrollY = 0f;
+        this.leftScrollX = 0f;
+        this.rightScrollX = 0f;
+        this.maxLeftLineChars = maxLineLength(this.leftLines);
+        this.maxRightLineChars = maxLineLength(this.rightLines);
         inlineDiffCache.evictAll();
         scroller.forceFinished(true);
         rebuildLayoutTables();
         invalidate();
+    }
+
+    private static int maxLineLength(List<PaneLine> lines) {
+        int max = 0;
+        for (int i = 0; i < lines.size(); i++) {
+            int len = Math.min(lines.get(i).text.length(), MAX_RENDERED_CHARS_PER_LINE);
+            if (len > max) max = len;
+        }
+        return max;
     }
 
     public void setSearchQuery(String query, boolean matchCase) {
@@ -324,6 +428,15 @@ public class DualDiffCanvasView extends View {
         postInvalidateOnAnimation();
     }
 
+    private void scrollPaneX(boolean isLeft, float dx) {
+        if (isLeft) {
+            leftScrollX = Math.max(0f, Math.min(maxLeftScrollX, leftScrollX + dx));
+        } else {
+            rightScrollX = Math.max(0f, Math.min(maxRightScrollX, rightScrollX + dx));
+        }
+        postInvalidateOnAnimation();
+    }
+
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
@@ -352,8 +465,8 @@ public class DualDiffCanvasView extends View {
         float charWidth = Math.max(1f, textPaint.measureText("M"));
         charsPerLine = Math.max(10, (int) Math.floor((paneWidth - panePaddingH * 2f) / charWidth));
 
-        leftLineStartRow = buildWrapOffsets(leftLines, charsPerLine);
-        rightLineStartRow = buildWrapOffsets(rightLines, charsPerLine);
+        leftLineStartRow = buildWrapOffsets(leftLines, charsPerLine, wordWrap);
+        rightLineStartRow = buildWrapOffsets(rightLines, charsPerLine, wordWrap);
 
         int hCount = hunks.size();
         hunkScrollStartRow = new int[hCount + 1];
@@ -422,11 +535,31 @@ public class DualDiffCanvasView extends View {
         float totalH = totalTrackRows * rowHeight;
         maxScrollY = Math.max(0f, totalH - getHeight() + rowHeight * 2f);
         if (scrollY > maxScrollY) scrollY = maxScrollY;
+        if (wordWrap || getWidth() <= 0) {
+            maxLeftScrollX = 0f;
+            maxRightScrollX = 0f;
+            leftScrollX = 0f;
+            rightScrollX = 0f;
+        } else {
+            float contentWidth = Math.max(1f, getWidth() - minimapWidth);
+            float paneWidth = Math.max(1f, (contentWidth - gutterWidth) * 0.5f);
+            float charWidth = Math.max(1f, textPaint.measureText("M"));
+            maxLeftScrollX = Math.max(0f, maxLeftLineChars * charWidth + panePaddingH * 2f - paneWidth);
+            maxRightScrollX = Math.max(0f, maxRightLineChars * charWidth + panePaddingH * 2f - paneWidth);
+            if (leftScrollX > maxLeftScrollX) leftScrollX = maxLeftScrollX;
+            if (rightScrollX > maxRightScrollX) rightScrollX = maxRightScrollX;
+        }
     }
 
-    private static int[] buildWrapOffsets(List<PaneLine> lines, int wrapCols) {
+    private static int[] buildWrapOffsets(List<PaneLine> lines, int wrapCols, boolean wrap) {
         int n = lines.size();
         int[] offsets = new int[n + 1];
+        if (!wrap) {
+            for (int i = 0; i <= n; i++) {
+                offsets[i] = i;
+            }
+            return offsets;
+        }
         int acc = 0;
         for (int i = 0; i < n; i++) {
             offsets[i] = acc;
@@ -442,6 +575,13 @@ public class DualDiffCanvasView extends View {
     public void computeScroll() {
         if (scroller.computeScrollOffset()) {
             scrollY = Math.max(0f, Math.min(maxScrollY, scroller.getCurrY()));
+            if (!wordWrap) {
+                if (flingLeftPane) {
+                    leftScrollX = Math.max(0f, Math.min(maxLeftScrollX, scroller.getCurrX()));
+                } else {
+                    rightScrollX = Math.max(0f, Math.min(maxRightScrollX, scroller.getCurrX()));
+                }
+            }
             postInvalidateOnAnimation();
         }
     }
@@ -581,7 +721,7 @@ public class DualDiffCanvasView extends View {
         // 3. Left pane text & line numbers
         canvas.save();
         canvas.clipRect(0, 0, leftPaneEnd, h);
-        drawPaneLines(canvas, leftLines, leftLineStartRow, leftScrollY, panePaddingH, h, true);
+        drawPaneLines(canvas, leftLines, leftLineStartRow, leftScrollY, leftScrollX, panePaddingH, paneWidth, h, true);
         canvas.restore();
         drawPaneNumbers(canvas, leftLines, leftLineStartRow, leftScrollY,
                 leftPaneEnd + numColWidth - panePaddingH, h, true);
@@ -589,7 +729,7 @@ public class DualDiffCanvasView extends View {
         // 4. Right pane text & line numbers
         canvas.save();
         canvas.clipRect(rightPaneStart, 0, contentRight, h);
-        drawPaneLines(canvas, rightLines, rightLineStartRow, rightScrollY, rightPaneStart + panePaddingH, h, false);
+        drawPaneLines(canvas, rightLines, rightLineStartRow, rightScrollY, rightScrollX, rightPaneStart + panePaddingH, paneWidth, h, false);
         canvas.restore();
         drawPaneNumbers(canvas, rightLines, rightLineStartRow, rightScrollY,
                 rightPaneStart - numColWidth + panePaddingH, h, false);
@@ -646,7 +786,8 @@ public class DualDiffCanvasView extends View {
     }
 
     private void drawPaneLines(Canvas canvas, List<PaneLine> lines, int[] startRows,
-                               float paneScrollY, float textX, int viewHeight, boolean isLeft) {
+                               float paneScrollY, float paneScrollX, float textX,
+                               float paneWidth, int viewHeight, boolean isLeft) {
         if (lines.isEmpty()) return;
         int totalRows = startRows[lines.size()];
         int firstRow = Math.max(0, (int) Math.floor(paneScrollY / rowHeight));
@@ -655,7 +796,10 @@ public class DualDiffCanvasView extends View {
 
         int lineIdx = findLineForVisualRow(startRows, firstRow);
         String queryLower = searchQuery.isEmpty() ? "" : (searchMatchCase ? searchQuery : searchQuery.toLowerCase());
-        float charW = textPaint.measureText("M");
+        float charW = Math.max(1f, textPaint.measureText("M"));
+
+        int visColStart = wordWrap ? 0 : Math.max(0, (int) Math.floor((paneScrollX - panePaddingH) / charW) - 2);
+        int visColEnd = wordWrap ? 0 : Math.max(visColStart + 1, (int) Math.ceil((paneScrollX + paneWidth) / charW) + 2);
 
         int cachedLineIdx = -1;
         int[] cachedRanges = null;
@@ -670,11 +814,22 @@ public class DualDiffCanvasView extends View {
             }
 
             PaneLine line = lines.get(lineIdx);
-            int rowInLine = row - startRows[lineIdx];
-            int sliceStart = rowInLine * charsPerLine;
             int maxLen = Math.min(line.text.length(), MAX_RENDERED_CHARS_PER_LINE);
-            if (sliceStart >= maxLen) continue;
-            int sliceEnd = Math.min(maxLen, sliceStart + charsPerLine);
+            int sliceStart;
+            int sliceEnd;
+            float drawX;
+            if (wordWrap) {
+                int rowInLine = row - startRows[lineIdx];
+                sliceStart = rowInLine * charsPerLine;
+                if (sliceStart >= maxLen) continue;
+                sliceEnd = Math.min(maxLen, sliceStart + charsPerLine);
+                drawX = textX;
+            } else {
+                sliceStart = Math.min(maxLen, visColStart);
+                if (sliceStart >= maxLen) continue;
+                sliceEnd = Math.min(maxLen, visColEnd);
+                drawX = textX - paneScrollX + sliceStart * charW;
+            }
 
             float y = row * rowHeight - paneScrollY;
 
@@ -687,8 +842,8 @@ public class DualDiffCanvasView extends View {
                     int drawStart = Math.max(sliceStart, rStart) - sliceStart;
                     int drawEnd = Math.min(sliceEnd, rEnd) - sliceStart;
                     if (drawEnd > drawStart) {
-                        canvas.drawRect(textX + drawStart * charW, y,
-                                textX + drawEnd * charW, y + rowHeight, inlineDiffPaint);
+                        canvas.drawRect(drawX + drawStart * charW, y,
+                                drawX + drawEnd * charW, y + rowHeight, inlineDiffPaint);
                     }
                 }
             }
@@ -698,13 +853,13 @@ public class DualDiffCanvasView extends View {
                 String hay = searchMatchCase ? slice : slice.toLowerCase();
                 int idx = hay.indexOf(queryLower);
                 while (idx >= 0) {
-                    float hx1 = textX + idx * charW;
+                    float hx1 = drawX + idx * charW;
                     float hx2 = hx1 + queryLower.length() * charW;
                     canvas.drawRect(hx1, y, hx2, y + rowHeight, searchHighlightPaint);
                     idx = hay.indexOf(queryLower, idx + queryLower.length());
                 }
             }
-            canvas.drawText(line.text, sliceStart, sliceEnd, textX, y + textBaselineOffset, textPaint);
+            canvas.drawText(line.text, sliceStart, sliceEnd, drawX, y + textBaselineOffset, textPaint);
         }
     }
 
