@@ -45,6 +45,9 @@ public class PickFileActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        io.github.abdurazaaqmohammed.ui.common.theme.ThemeRegistry.applySaved(this);
+        io.github.abdurazaaqmohammed.ui.common.theme.ThemeRegistry.applyAccent(this);
+        io.github.abdurazaaqmohammed.ui.common.util.AppFont.installFactory(this);
         super.onCreate(savedInstanceState);
         Intent intent = getIntent();
         String action = intent == null ? null : intent.getAction();
