@@ -8,7 +8,6 @@ import com.github.difflib.patch.Patch;
 import com.github.difflib.text.DiffRow;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -468,31 +467,6 @@ public final class TextDiffEngine {
             out.add(line);
         }
         return out;
-    }
-
-    private static BiPredicate<String, String> equalizer(IgnoreMode ignoreMode, boolean matchCase) {
-        return (a, b) -> {
-            if (a.equals(b)) return true;
-            String x = a;
-            String y = b;
-            switch (ignoreMode) {
-                case TRIM -> {
-                    x = x.trim();
-                    y = y.trim();
-                }
-                case WHITESPACE, WHITESPACE_EMPTY -> {
-                    x = stripWhitespace(x);
-                    y = stripWhitespace(y);
-                }
-                default -> {
-                }
-            }
-            if (!matchCase) {
-                x = x.toLowerCase(Locale.ROOT);
-                y = y.toLowerCase(Locale.ROOT);
-            }
-            return x.equals(y);
-        };
     }
 
     private static String stripWhitespace(String value) {
