@@ -16,10 +16,10 @@ import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
 import io.github.abdurazaaqmohammed.MPManager.R;
+import io.github.abdurazaaqmohammed.ui.common.base.BaseActivity;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -32,7 +32,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class FreeStyleCanvasActivity extends AppCompatActivity {
+public class FreeStyleCanvasActivity extends BaseActivity {
 
     private FreeStyleCanvasView canvasView;
     private MaterialButton btnSave;
