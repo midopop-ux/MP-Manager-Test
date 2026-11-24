@@ -1722,7 +1722,8 @@ public class FileOpener {
             || fileName.endsWith(".conf") || fileName.endsWith(".cfg") || fileName.endsWith(".ini")
             || fileName.endsWith(".log") || fileName.endsWith(".md") || fileName.endsWith(".csv")
             || fileName.endsWith(".yaml") || fileName.endsWith(".yml") || fileName.endsWith(".toml")
-            || fileName.endsWith(".rc")) {
+            || fileName.endsWith(".rc")
+            || io.github.abdurazaaqmohammed.util.text.OfficeDocumentParser.isOfficeFileName(fileName)) {
             openTextEditorRootAware(file);
         } else if (FileUtils.isElf(fileName) || FileUtils.isElfFile(file)) {
             withReadableCopy(file, readable -> openElfFileDefault(readable, fileName, file));

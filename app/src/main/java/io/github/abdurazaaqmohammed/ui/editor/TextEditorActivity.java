@@ -6,6 +6,7 @@ import io.github.abdurazaaqmohammed.data.prefs.MinimizedEditors;
 import io.github.abdurazaaqmohammed.data.prefs.UiPrefs;
 
 import io.github.abdurazaaqmohammed.util.text.FileSize;
+import io.github.abdurazaaqmohammed.util.text.OfficeDocumentParser;
 
 import android.content.Intent;
 import android.database.Cursor;
@@ -740,12 +741,14 @@ public class TextEditorActivity extends BaseActivity implements UnifiedEditorFra
                     return;
                 }
                 tab.fileSize = tabSize(tab);
-                if (!tab.allowLargeText && tab.fileSize > MAX_TEXT_OPEN_BYTES) {
+                boolean isOfficeDoc = OfficeDocumentParser.isOfficeDocument(tab.file, tab.title);
+                long warnLimit = isOfficeDoc ? 64L * 1024 * 1024 : MAX_TEXT_OPEN_BYTES;
+                if (!tab.allowLargeText && tab.fileSize > warnLimit) {
                     runOnUiThread(() -> offerLargeFileWarning(tab, token));
                     return;
                 }
-                tab.readOnly = tab.fileSize > 2L * 1024 * 1024;
-                tab.lightweight = tab.fileSize > 512L * 1024;
+                tab.readOnly = isOfficeDoc || tab.fileSize > 2L * 1024 * 1024;
+                tab.lightweight = !isOfficeDoc && tab.fileSize > 512L * 1024;
                 if (tab.pendingDecoded != null) {
                     applyLoadedText(tab, tab.pendingDecoded, token);
                     return;
@@ -903,6 +906,35 @@ public class TextEditorActivity extends BaseActivity implements UnifiedEditorFra
      */
     private Content readTabText(EditorTab tab, int token) {
         if (tab.file == null && tab.fileUri == null) return new Content("");
+        if (OfficeDocumentParser.isOfficeDocument(tab.file, tab.title)) {
+            tab.readOnly = true;
+            if (tab.file != null) {
+                try {
+                    return new Content(OfficeDocumentParser.parseToText(tab.file, tab.title));
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+            File tmp = null;
+            try (InputStream is = getContentResolver().openInputStream(tab.fileUri)) {
+                if (is == null) return null;
+                tmp = File.createTempFile("office_", "_" + (tab.title != null ? tab.title : "doc"), getCacheDir());
+                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tmp)) {
+                    byte[] buf = new byte[8192];
+                    int r;
+                    while ((r = is.read(buf)) != -1) {
+                        if (tab.loadToken != token || isDestroyed()) throw new InterruptedIOException();
+                        fos.write(buf, 0, r);
+                    }
+                }
+                return new Content(OfficeDocumentParser.parseToText(tmp, tab.title));
+            } catch (Exception e) {
+                return null;
+            } finally {
+                if (tmp != null) //noinspection ResultOfMethodCallIgnored
+                    tmp.delete();
+            }
+        }
         // Binary axml must be decoded, not read as UTF-8 text
         if (tab.axml) {
             try (InputStream is = tab.file != null ? FileUtils.getInputStream(tab.file)
@@ -1010,6 +1042,9 @@ public class TextEditorActivity extends BaseActivity implements UnifiedEditorFra
                     String fname = tab.rootOriginalPath != null ? new File(tab.rootOriginalPath).getName()
                             : (tab.file != null ? tab.file.getName() : tab.title);
                     f.setFileName(fname);
+                    String officeScope = OfficeDocumentParser.scopeForKind(
+                            OfficeDocumentParser.detectKind(tab.file, fname));
+                    if (officeScope != null) f.applySyntax(officeScope);
                     if (tab.pendingSearch != null && !tab.pendingSearch.isEmpty()) {
                         f.searchFor(tab.pendingSearch, tab.pendingSearchRegex, tab.pendingSearchMatchCase);
                         tab.pendingSearch = null;

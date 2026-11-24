@@ -73,6 +73,21 @@
       "grammar": "smali/syntaxes/smali.tmLanguage.json",
       "name": "Smali",
       "scopeName": "source.smali"
+    },
+    {
+      "grammar": "syntaxes/grammars/office_document.tmLanguage.json",
+      "name": "Office Document",
+      "scopeName": "text.office.document"
+    },
+    {
+      "grammar": "syntaxes/grammars/office_spreadsheet.tmLanguage.json",
+      "name": "Office Spreadsheet",
+      "scopeName": "text.office.spreadsheet"
+    },
+    {
+      "grammar": "syntaxes/grammars/office_presentation.tmLanguage.json",
+      "name": "Office Presentation",
+      "scopeName": "text.office.presentation"
     }
   ]
 }

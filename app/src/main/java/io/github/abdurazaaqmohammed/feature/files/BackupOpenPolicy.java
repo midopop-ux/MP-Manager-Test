@@ -29,6 +29,7 @@ public final class BackupOpenPolicy {
     }
 
     public static boolean hasOriginalFormat(String name) {
+        if (io.github.abdurazaaqmohammed.util.text.OfficeDocumentParser.isOfficeFileName(name)) return true;
         String ext = "." + FilenameUtils.getExtension(name).toLowerCase(Locale.ROOT);
         if (FileUtils.matchExt(ext, FileUtils.TEXT_EXTS) || FileUtils.matchExt(ext, FileUtils.IMAGE_EXTS)
                 || FileUtils.matchExt(ext, FileUtils.AUDIO_EXTS) || FileUtils.matchExt(ext, FileUtils.VIDEO_EXTS)
