@@ -55,6 +55,7 @@ import com.google.android.material.tabs.TabLayout;
 
 import io.github.abdurazaaqmohammed.feature.arm64.util.CryptoHelper;
 import java.security.MessageDigest;
+import java.util.concurrent.Future;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -81,6 +82,7 @@ import io.github.abdurazaaqmohammed.privilege.api.PrivilegeManager;
 import io.github.abdurazaaqmohammed.ui.common.base.BaseActivity;
 import io.github.abdurazaaqmohammed.ui.editor.HexEditorActivity;
 import io.github.abdurazaaqmohammed.util.io.FileUtils;
+import io.github.abdurazaaqmohammed.util.misc.AppExecutors;
 
 /**
  * Modern, in-app ARM64 (AArch64) Native Disassembler & Patcher:
@@ -191,7 +193,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
     private MaterialButton btnHexColsToggle;
     private final Object hexRafLock = new Object();
     private RandomAccessFile hexRaf;
-    private Thread hexSearchThread;
+    private Future<?> hexSearchTask;
     private int hexSearchSeq = 0;
     private int filterFunctionsSeq = 0;
     private int filterStringsSeq = 0;
@@ -275,9 +277,9 @@ public class Arm64DisassemblerActivity extends BaseActivity {
     protected void onDestroy() {
         super.onDestroy();
         searchHandler.removeCallbacksAndMessages(null);
-        if (hexSearchThread != null && hexSearchThread.isAlive()) {
-            hexSearchThread.interrupt();
-            hexSearchThread = null;
+        if (hexSearchTask != null) {
+            hexSearchTask.cancel(true);
+            hexSearchTask = null;
         }
         synchronized (hexRafLock) {
             if (hexRaf != null) {
@@ -919,14 +921,14 @@ public class Arm64DisassemblerActivity extends BaseActivity {
 
     private void loadElfData() {
         progressBar.setVisibility(View.VISIBLE);
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try (RandomAccessFile raf = new RandomAccessFile(soFile, "r");
                  ElfParser elf = new ElfParser(raf)) {
 
                 if (!elf.is64 || elf.machine != 0xB7) {
                     final boolean is64 = elf.is64;
                     final int machine = elf.machine;
-                    runOnUiThread(() -> {
+                    AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                         progressBar.setVisibility(View.GONE);
                         showUnsupportedElfDialog(is64, machine);
                     });
@@ -1301,7 +1303,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     hashSha256 = CryptoHelper.bytesToHex(sha256.digest());
                 } catch (Exception ignored) {}
 
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     String info = String.format(Locale.ROOT, "ELF64 AArch64 | %,d functions | .text: 0x%X - 0x%X",
                             allFunctions.size(), textSecAddr, textSecAddr + textSecSize);
@@ -1328,12 +1330,12 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     updateExpandCollapseButtonsUI();
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     showElfErrorDialog("ELF Parse Failed", "Failed to parse ELF binary:\n" + e.getMessage() + "\n\nFile: " + soPath);
                 });
             }
-        }).start();
+        });
     }
 
     private void showUnsupportedElfDialog(boolean is64, int machine) {
@@ -1371,7 +1373,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
 
     private void filterFunctionsAsync(String query) {
         final int seq = ++filterFunctionsSeq;
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             List<Arm64Function> temp = new ArrayList<>();
             synchronized (allFunctions) {
                 if (TextUtils.isEmpty(query)) {
@@ -1404,7 +1406,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     }
                 }
             }
-            runOnUiThread(() -> {
+            AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                 if (seq != filterFunctionsSeq) return;
                 synchronized (filteredFunctions) {
                     filteredFunctions.clear();
@@ -1414,7 +1416,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     functionsAdapter.notifyDataSetChanged();
                 }
             });
-        }).start();
+        });
     }
 
     private void disassembleFunction(Arm64Function func) {
@@ -1425,7 +1427,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
         currentFunction = func;
         loadedInstructionBytes = 0;
         progressBar.setVisibility(View.VISIBLE);
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try (RandomAccessFile raf = new RandomAccessFile(soFile, "r")) {
                 List<Arm64Instruction> instrs = new ArrayList<>();
                 long startOffset = func.fileOffset;
@@ -1475,7 +1477,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     currentInstructions.addAll(instrs);
                 }
 
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     showDisassemblyViewUi();
                     if (onComplete != null) {
@@ -1483,18 +1485,18 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     }
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     Extensions.showMessage(this, "Disassembly Error: " + e.getMessage());
                 });
             }
-        }).start();
+        });
     }
 
     private void loadMoreInstructions() {
         if (currentFunction == null) return;
         progressBar.setVisibility(View.VISIBLE);
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try (RandomAccessFile raf = new RandomAccessFile(soFile, "r")) {
                 List<Arm64Instruction> instrs = new ArrayList<>();
                 long startOffset = currentFunction.fileOffset + loadedInstructionBytes;
@@ -1547,19 +1549,19 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     currentInstructions.addAll(instrs);
                 }
 
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     instructionsAdapter.notifyItemRangeInserted(oldSize, instrs.size());
                     updateDisassemblyHeader();
                     updateLoadMoreButton();
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     Extensions.showMessage(this, "Load More Error: " + e.getMessage());
                 });
             }
-        }).start();
+        });
     }
 
     private void updateDisassemblyHeader() {
@@ -1662,7 +1664,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
     private void jumpToAddressOrOffset(long target) {
         recordCurrentNavLocation();
         progressBar.setVisibility(View.VISIBLE);
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try (RandomAccessFile raf = new RandomAccessFile(soFile, "r");
                  ElfParser elf = new ElfParser(raf)) {
 
@@ -1681,7 +1683,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                 vaddr = (vaddr / 4) * 4;
 
                 if (offset < 0 || offset >= soFile.length()) {
-                    runOnUiThread(() -> {
+                    AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                         progressBar.setVisibility(View.GONE);
                         Extensions.showMessage(this, "Target offset out of bounds: 0x" + Long.toHexString(target));
                     });
@@ -1698,12 +1700,12 @@ public class Arm64DisassemblerActivity extends BaseActivity {
 
                 disassembleFunction(f);
             } catch (Exception e) {
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     Extensions.showMessage(this, "Error: " + e.getMessage());
                 });
             }
-        }).start();
+        });
     }
 
     private long extractBranchTarget(Arm64Instruction inst) {
@@ -1996,7 +1998,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
 
     private void exportCurrentFunctionDisassembly() {
         if (currentFunction == null || currentInstructions.isEmpty()) return;
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                 if (!downloadDir.exists()) downloadDir.mkdirs();
@@ -2034,11 +2036,11 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                 }
 
                 final File finalOut = outFile;
-                runOnUiThread(() -> Extensions.showMessage(this, "Exported: " + finalOut.getName() + " to Download"));
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> Extensions.showMessage(this, "Exported: " + finalOut.getName() + " to Download"));
             } catch (Exception e) {
-                runOnUiThread(() -> Extensions.showMessage(this, "Export failed: " + e.getMessage()));
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> Extensions.showMessage(this, "Export failed: " + e.getMessage()));
             }
-        }).start();
+        });
     }
 
     private void applyReturnFunctionPatch(Arm64Instruction inst, int position, boolean returnTrue, androidx.appcompat.app.AlertDialog dialog) {
@@ -2300,7 +2302,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
             return;
         }
         progressBar.setVisibility(View.VISIBLE);
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 // 0. Backup original file if requested (.bak)
                 if (backupOriginalRequested && !TextUtils.isEmpty(originalPath)) {
@@ -2364,7 +2366,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                 if (zipEntryPath != null) resultData.putExtra("zipEntryPath", zipEntryPath);
                 setResult(757, resultData);
 
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     updateSaveButtonUi();
                     instructionsAdapter.notifyDataSetChanged();
@@ -2372,12 +2374,12 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     if (onComplete != null) onComplete.run();
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     showSaveFailedDialog(e);
                 });
             }
-        }).start();
+        });
     }
 
     private void showSaveFailedDialog(Exception ex) {
@@ -2394,7 +2396,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
 
     private void exportPatchedSoToDownload() {
         progressBar.setVisibility(View.VISIBLE);
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                 if (!downloadDir.exists()) downloadDir.mkdirs();
@@ -2417,7 +2419,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                 }
 
                 final File finalOut = outFile;
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     new MaterialAlertDialogBuilder(this)
                             .setTitle("Patched Library Exported")
@@ -2426,12 +2428,12 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                             .show();
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     progressBar.setVisibility(View.GONE);
                     Extensions.showMessage(this, "Export failed: " + e.getMessage());
                 });
             }
-        }).start();
+        });
     }
 
     private void showDiscardConfirmDialog() {
@@ -3714,8 +3716,9 @@ public class Arm64DisassemblerActivity extends BaseActivity {
 
     private void performHexSearchAsync(String query) {
         final int searchId = ++hexSearchSeq;
-        if (hexSearchThread != null && hexSearchThread.isAlive()) {
-            hexSearchThread.interrupt();
+        if (hexSearchTask != null) {
+            hexSearchTask.cancel(true);
+            hexSearchTask = null;
         }
         if (TextUtils.isEmpty(query)) {
             synchronized (hexMatchOffsets) {
@@ -3724,14 +3727,14 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                 lastHexSearchLength = 0;
                 hexSearchCapped = false;
             }
-            runOnUiThread(() -> {
+            AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                 if (tvHexMatchCount != null) tvHexMatchCount.setText("0/0");
                 if (hexAdapter != null) hexAdapter.notifyDataSetChanged();
             });
             return;
         }
 
-        hexSearchThread = new Thread(() -> {
+        hexSearchTask = AppExecutors.io().submit(() -> {
             try {
                 byte[] targetBytes = parseHexSearchQuery(query);
                 if (targetBytes == null || targetBytes.length == 0) {
@@ -3741,7 +3744,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                         lastHexSearchLength = 0;
                         hexSearchCapped = false;
                     }
-                    runOnUiThread(() -> {
+                    AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                         if (tvHexMatchCount != null) tvHexMatchCount.setText("0/0");
                         if (hexAdapter != null) hexAdapter.notifyDataSetChanged();
                     });
@@ -3796,7 +3799,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                 }
 
                 final boolean isCapped = capped;
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                     if (searchId != hexSearchSeq) return;
                     synchronized (hexMatchOffsets) {
                         hexMatchOffsets.clear();
@@ -3822,13 +3825,12 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                 });
             } catch (Exception e) {
                 if (searchId == hexSearchSeq) {
-                    runOnUiThread(() -> {
+                    AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                         if (tvHexMatchCount != null) tvHexMatchCount.setText("0/0");
                     });
                 }
             }
         });
-        hexSearchThread.start();
     }
 
     private byte[] parseHexSearchQuery(String query) {
@@ -3857,7 +3859,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
             long targetOffset = hexMatchOffsets.get(currentHexMatchIndex);
             final int currIdx = currentHexMatchIndex;
             final boolean capped = hexSearchCapped;
-            runOnUiThread(() -> {
+            AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                 if (tvHexMatchCount != null) {
                     tvHexMatchCount.setText(String.format(Locale.ROOT, "%d/%d%s",
                             currIdx + 1, size, capped ? "+" : ""));
@@ -4150,7 +4152,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
 
     private void filterStringsAsync(String query) {
         final int seq = ++filterStringsSeq;
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             List<ElfParser.ElfString> result = new ArrayList<>();
             String q = query != null ? query.trim().toLowerCase(Locale.ROOT) : "";
             synchronized (allStrings) {
@@ -4166,7 +4168,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     }
                 }
             }
-            runOnUiThread(() -> {
+            AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                 if (seq != filterStringsSeq) return;
                 synchronized (filteredStrings) {
                     filteredStrings.clear();
@@ -4179,12 +4181,12 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     stringsAdapter.notifyDataSetChanged();
                 }
             });
-        }).start();
+        });
     }
 
     private void filterTreeAsync(String query) {
         final int seq = ++filterTreeSeq;
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             List<ElfTreeItem> result = new ArrayList<>();
             String q = query != null ? query.trim().toLowerCase(Locale.ROOT) : "";
             boolean isSearching = !TextUtils.isEmpty(q);
@@ -4227,7 +4229,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     }
                 }
             }
-            runOnUiThread(() -> {
+            AppExecutors.runOnUiIfAlive(Arm64DisassemblerActivity.this, () -> {
                 if (seq != filterTreeSeq) return;
                 synchronized (filteredTreeItems) {
                     filteredTreeItems.clear();
@@ -4240,7 +4242,7 @@ public class Arm64DisassemblerActivity extends BaseActivity {
                     tvTreeItemsCount.setText(String.format(Locale.ROOT, "%,d items", result.size()));
                 }
             });
-        }).start();
+        });
     }
 
     private static int signExtend(int val, int bits) {
