@@ -47,6 +47,7 @@ import java.io.FileInputStream;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import io.github.abdurazaaqmohammed.util.misc.AppExecutors;
 
 /**
  * High-performance PDF Viewer Activity featuring:
@@ -524,7 +525,7 @@ public class PdfViewerActivity extends BaseActivity {
                     bitmapCache.put(pos, renderedBitmap);
                 }
 
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(PdfViewerActivity.this, () -> {
                     if (!isFinishing() && !isDestroyed()) {
                         if (holder.getBindingAdapterPosition() == pos) {
                             holder.pageLoading.setVisibility(View.GONE);
