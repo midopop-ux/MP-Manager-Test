@@ -1053,30 +1053,35 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
         // Frameworks are only needed by the APK tools, and the first copy is tens of
         // megabytes of raw-resource I/O. It starts after the first frame is up, on a
         // background-priority thread, so it never competes with the startup listing.
-        runWhenIdle(() -> new Thread(() -> {
-            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
-            File frameworks = UiPrefs.frameworkDir(this);
-            if (frameworks.exists() || frameworks.mkdirs()) {
-                int[] resourceIds = {
-                        R.raw.android_23, R.raw.android_24, R.raw.android_25,
-                        R.raw.android_26, R.raw.android_27, R.raw.android_28,
-                        R.raw.android_29, R.raw.android_30, R.raw.android_31,
-                        R.raw.android_32, R.raw.android_33, R.raw.android_34,
-                        R.raw.android_35, R.raw.android_36
-                };
+        runWhenIdle(() -> AppExecutors.io().execute(() -> {
+            int prevPrio = Process.getThreadPriority(Process.myTid());
+            try {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+                File frameworks = UiPrefs.frameworkDir(this);
+                if (frameworks.exists() || frameworks.mkdirs()) {
+                    int[] resourceIds = {
+                            R.raw.android_23, R.raw.android_24, R.raw.android_25,
+                            R.raw.android_26, R.raw.android_27, R.raw.android_28,
+                            R.raw.android_29, R.raw.android_30, R.raw.android_31,
+                            R.raw.android_32, R.raw.android_33, R.raw.android_34,
+                            R.raw.android_35, R.raw.android_36
+                    };
 
-                for (int i = 23; i < 37; i++) {
-                    File out = new File(frameworks, "android_" + i + ".apk");
+                    for (int i = 23; i < 37; i++) {
+                        File out = new File(frameworks, "android_" + i + ".apk");
 
-                    if(!out.exists()) try (InputStream in = rss.openRawResource(resourceIds[i-23])) {
-                        FileUtils.copyFile(in, out);
-                    } catch (Exception ignored) { }
+                        if (!out.exists()) try (InputStream in = rss.openRawResource(resourceIds[i - 23])) {
+                            FileUtils.copyFile(in, out);
+                        } catch (Exception ignored) { }
+                    }
+
                 }
-
+            } finally {
+                Process.setThreadPriority(prevPrio);
             }
             // NOTE: setupPullToRefresh() must run on the main thread; it is
             // called from onCreate below (moved: was a WrongThread call here).
-        }, "framework-copy").start());
+        }));
 
         handler = new Handler(Looper.getMainLooper());
         drawerLayout = findViewById(R.id.drawer_layout);
@@ -2169,7 +2174,7 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
             if (files == null && shizukuDir && PrivilegeManager.Files.active(this) != PrivilegeManager.Backend.ROOT) {
                 boolean rootAvailable = false;
                 try { rootAvailable = PrivilegeManager.Root.isRootAvailable(this); } catch (Exception ignored) {}
-                if (!rootAvailable) runOnUiThread(() -> {
+                if (!rootAvailable) AppExecutors.runOnUiIfAlive(MainActivity.this, () -> {
                     try {
                         if (isNetworkPaneLoadCurrent(pane1, generation)) showShizukuGuideOnce(folder, pane1);
                     } catch (Exception ignored) {
@@ -2188,7 +2193,7 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
                     }
                     if (fallback != null && (fallback.exists() || PrivilegeManager.Files.exists(this, fallback.getAbsolutePath())) && !fallback.equals(folder)) {
                         final File validFallback = fallback;
-                        runOnUiThread(() -> {
+                        AppExecutors.runOnUiIfAlive(MainActivity.this, () -> {
                             if (isNetworkPaneLoadCurrent(pane1, generation)) loadFolderInPaneAsync(validFallback, pane1, false);
                         });
                         return null;
@@ -2196,7 +2201,7 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
                 }
                 final boolean shizukuOnlyRootPath = rootListingPath
                         && PrivilegeManager.Files.active(this) == PrivilegeManager.Backend.SHIZUKU;
-                runOnUiThread(() -> {
+                AppExecutors.runOnUiIfAlive(MainActivity.this, () -> {
                     try {
                         if (isNetworkPaneLoadCurrent(pane1, generation)) {
                             Extensions.showMessage(this, shizukuOnlyRootPath
@@ -2795,7 +2800,7 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
             onPositive = () -> PrivilegeManager.shizuku().requestPermission();
         }
         // Once the binder arrives (user started Shizuku / granted), reload this folder automatically.
-        PrivilegeManager.shizuku().onBinderReceived(() -> runOnUiThread(() -> {
+        PrivilegeManager.shizuku().onBinderReceived(() -> AppExecutors.runOnUiIfAlive(MainActivity.this, () -> {
             if (PrivilegeManager.shizuku().isGranted()) loadFolderInPane(folder, pane1, false);
         }));
         new MaterialAlertDialogBuilder(this)
@@ -3806,7 +3811,7 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
         boolean directory = intent.getBooleanExtra(BookmarkShortcuts.EXTRA_DIRECTORY, true);
         intent.removeExtra(BookmarkShortcuts.EXTRA_PATH);
         intent.removeExtra("locatePath");
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             File target;
             try {
                 SafFs.init(this);
@@ -3840,7 +3845,7 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
                     });
                 }
             });
-        }, "bookmark-shortcut-open").start();
+        });
     }
 
 
@@ -4003,7 +4008,7 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
 
     /** Recycle bin browser: restore / permanently delete binned items. */
     private void showRecycleBinDialog() {
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             RecycleBin.purgeExpired(this);
             List<RecycleBin.Entry> entries =
                     RecycleBin.entries(this);
@@ -4043,7 +4048,7 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
                         .setNegativeButton(android.R.string.cancel, null)
                         .create());
             });
-        }).start();
+        });
     }
 
     private void showRecycleBinItemDialog(RecycleBin.Entry entry) {

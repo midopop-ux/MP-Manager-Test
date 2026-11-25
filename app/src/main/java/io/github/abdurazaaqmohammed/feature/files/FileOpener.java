@@ -157,6 +157,7 @@ import io.github.abdurazaaqmohammed.plugins.ipc.PluginContracts;
 import io.github.abdurazaaqmohammed.plugins.ipc.PluginEvents;
 import io.github.abdurazaaqmohammed.util.text.ShellQuote;
 import io.github.codehasan.colorpicker.extensions.Extensions;
+import io.github.abdurazaaqmohammed.util.misc.AppExecutors;
 
 /**
  * File-open workflows extracted from MainFilesArrayAdapter:
@@ -455,7 +456,7 @@ public class FileOpener {
                     + MimeUtil.getReportedMimeType(context, file));
         } catch (Exception ignored) {
         }
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             String real = MimeUtil.getRealMimeType(file);
             context.handler.post(() -> {
                 try {
@@ -463,7 +464,7 @@ public class FileOpener {
                 } catch (Exception ignored) {
                 }
             });
-        }).start();
+        });
 
         AlertDialog dialog = dialogUtil.getDialogBuilder()
                 .setCustomTitle(header)
@@ -1476,7 +1477,7 @@ public class FileOpener {
         ProgressManager pm = new ProgressManager(context, true).show();
         pm.setText(context.getString(R.string.loading));
 
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             StringBuilder sb = new StringBuilder();
             sb.append("File: ").append(fileName).append("\n");
             sb.append("Size: ").append(FileSize.getHumanReadableFileSize(file.length()))
@@ -1565,7 +1566,7 @@ public class FileOpener {
                         })
                         .show();
             });
-        }).start();
+        });
     }
 
 
@@ -1604,7 +1605,7 @@ public class FileOpener {
     private void formatXmlFile(File readable, File original, String fileName) {
         ProgressManager pm = new ProgressManager(context, true);
         pm.show();
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
                 dbf.setNamespaceAware(true);
@@ -1636,7 +1637,7 @@ public class FileOpener {
                 pm.dismiss();
                 new ErrorUtil(context).showError(e);
             }
-        }).start();
+        });
     }
 
     private void showShellScriptDialog(File readable, File original, String fileName) {
@@ -1692,7 +1693,7 @@ public class FileOpener {
             pm.setText(context.getString(R.string.sh_executing));
         } catch (Exception ignored) {
         }
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             int exitCode = -1;
             String out = "";
             String err = "";
@@ -1755,7 +1756,7 @@ public class FileOpener {
             final String stdout = out;
             final String stderr = err;
             context.handler.post(() -> showShellOutputDialog(code, stdout, stderr));
-        }).start();
+        });
     }
 
     private void showShellOutputDialog(int exitCode, String stdout, String stderr) {
@@ -1784,7 +1785,7 @@ public class FileOpener {
 
     private void importSignature(File file, String fileName) {
         File keysDir = UiPrefs.keysDir(context);
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 if (!keysDir.isDirectory() && !keysDir.mkdirs() && !keysDir.isDirectory()) {
                     throw new IOException("Cannot create keys dir");
@@ -1804,7 +1805,7 @@ public class FileOpener {
             } catch (Exception e) {
                 new ErrorUtil(context).showError(e);
             }
-        }).start();
+        });
     }
 
     /** Backup safety first, then explicit defaults and ordinary dispatch on the original file. */
@@ -1822,7 +1823,7 @@ public class FileOpener {
 
     private void handleBackupClick(File file, String fileName) {
         // Read only a header to recognize a native container; never restore a staged copy.
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             boolean nativeBackup = BackupOpenPolicy.isNativeBackup(file, fileName);
             boolean needsReadable = SafFs.isSaf(file) || !file.canRead();
             context.handler.post(() -> {
@@ -1832,7 +1833,7 @@ public class FileOpener {
                     completeBackupClick(file, nativeBackup, fileName);
                 }
             });
-        }, "backup-open").start();
+        });
     }
 
     private void completeBackupClick(File file, File readable, String name) {
@@ -1990,7 +1991,7 @@ public class FileOpener {
                     ProgressManager pm = new ProgressManager(context, false).show();
                     pm.setText(context.getString(R.string.unsparsing_progress, fileName));
 
-                    new Thread(() -> {
+                    AppExecutors.io().execute(() -> {
                         try {
                             SystemImageEngine.unsparseToFile(file, outRaw,
                                     new SystemImageEngine.ProgressCallback() {
@@ -2026,7 +2027,7 @@ public class FileOpener {
                                 Extensions.showMessage(context, "Unsparse failed: " + e.getMessage());
                             });
                         }
-                    }).start();
+                    });
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .setNeutralButton(R.string.open_with, (d, w) -> openWithDefaultOrDialog(file, fileName))
@@ -2045,7 +2046,7 @@ public class FileOpener {
             Extensions.showMessage(context, R.string.cannot_open_item);
             return;
         }
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 File staged = stageZipEntry((ZipEntryInfo) item);
                 context.handler.post(() -> {
@@ -2060,12 +2061,12 @@ public class FileOpener {
             } catch (Exception e) {
                 context.handler.post(() -> new ErrorUtil(context).showError(e));
             }
-        }).start();
+        });
     }
 
     public void shareZipEntries(List<ZipEntryInfo> entries) {
         if (entries == null || entries.isEmpty()) return;
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             ArrayList<Uri> uris = new ArrayList<>();
             IOException failure = null;
             for (ZipEntryInfo entry : entries) {
@@ -2101,7 +2102,7 @@ public class FileOpener {
                     new ErrorUtil(context).showError(e);
                 }
             });
-        }).start();
+        });
     }
 
     public void openWithZipEntry(Object item, String fileName) {
@@ -2110,7 +2111,7 @@ public class FileOpener {
             return;
         }
         final ZipEntryInfo entry = (ZipEntryInfo) item;
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 File staged = stageZipEntry(entry);
                 context.handler.post(() -> {
@@ -2123,7 +2124,7 @@ public class FileOpener {
             } catch (Exception e) {
                 context.handler.post(() -> new ErrorUtil(context).showError(e));
             }
-        }).start();
+        });
     }
 
     private long calculateTotalSize(List<File> files) {
@@ -2222,7 +2223,7 @@ public class FileOpener {
         };
         context.handler.postDelayed(showInitial, 80);
 
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             long size = calculateTotalSize(filesToMeasure);
             String nameWithSize = size > 0
                     ? baseName + " (" + FileSize.getHumanReadableFileSize(size) + ")"
@@ -2243,7 +2244,7 @@ public class FileOpener {
                     }
                 }
             });
-        }).start();
+        });
     }
 
     public void shareFolderAsZip(File folder) {
@@ -2255,7 +2256,7 @@ public class FileOpener {
         ProgressManager pm = new ProgressManager(context, true);
         pm.setText(context.getString(R.string.compressing));
         pm.show();
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             File zipFile = null;
             File stagedDir = null;
             try {
@@ -2312,7 +2313,7 @@ public class FileOpener {
                     FileUtils.deleteTree(stagedDir, null);
                 }
             }
-        }).start();
+        });
     }
 
     public void shareFoldersAsZip(List<File> files) {
@@ -2329,7 +2330,7 @@ public class FileOpener {
         ProgressManager pm = new ProgressManager(context, true);
         pm.setText(context.getString(R.string.compressing));
         pm.show();
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             File zipFile = null;
             File stagedDir = null;
             try {
@@ -2391,7 +2392,7 @@ public class FileOpener {
                     FileUtils.deleteTree(stagedDir, null);
                 }
             }
-        }).start();
+        });
     }
 
     public void shareMixedFilesAndFolders(List<File> folders, List<File> plainFiles) {
@@ -2409,7 +2410,7 @@ public class FileOpener {
         ProgressManager pm = new ProgressManager(context, true);
         pm.setText(context.getString(R.string.compressing));
         pm.show();
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             File zipFile = null;
             File stagedDir = null;
             try {
@@ -2489,7 +2490,7 @@ public class FileOpener {
                     FileUtils.deleteTree(stagedDir, null);
                 }
             }
-        }).start();
+        });
     }
 
     public void shareZipFolderAsZip(ZipEntryInfo entry) {
@@ -2510,7 +2511,7 @@ public class FileOpener {
         };
         context.handler.postDelayed(showInitial, 80);
 
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             long size = calculateZipEntryFolderSize(entry);
             String nameWithSize = size > 0
                     ? entry.getName() + " (" + FileSize.getHumanReadableFileSize(size) + ")"
@@ -2531,14 +2532,14 @@ public class FileOpener {
                     }
                 }
             });
-        }).start();
+        });
     }
 
     private void doShareZipFolderAsZip(ZipEntryInfo entry) {
         ProgressManager pm = new ProgressManager(context, true);
         pm.setText(context.getString(R.string.compressing));
         pm.show();
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             File zipFile = null;
             File stageExtractDir = null;
             try {
@@ -2602,7 +2603,7 @@ public class FileOpener {
                     FileUtils.deleteTree(stageExtractDir, null);
                 }
             }
-        }).start();
+        });
     }
 
     private static boolean appReadable(File file) {
@@ -2624,7 +2625,7 @@ public class FileOpener {
             // A provider document is answered by staging a real copy first;
             // every handler below then works on it unchanged.
             Extensions.showMessage(context, R.string.reading_from_provider);
-            new Thread(() -> {
+            AppExecutors.io().execute(() -> {
                 try {
                     File staged = PrivilegeManager.Staging.stageForRead(context, file.getAbsolutePath());
                     context.handler.post(() -> {
@@ -2637,7 +2638,7 @@ public class FileOpener {
                 } catch (Exception e) {
                     context.handler.post(() -> new ErrorUtil(context).showError(e));
                 }
-            }).start();
+            });
             return;
         }
         try {
@@ -2666,7 +2667,7 @@ public class FileOpener {
             return;
         }
         Extensions.showMessage(context, R.string.reading_with_elevated_access);
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 File staged = PrivilegeManager.Staging.stageForRead(context, file.getAbsolutePath());
                 context.handler.post(() -> {
@@ -2679,7 +2680,7 @@ public class FileOpener {
             } catch (Exception e) {
                 context.handler.post(() -> new ErrorUtil(context).showError(e));
             }
-        }).start();
+        });
     }
 
     private Intent rootAwareEditorIntent(File readable, File original) {
@@ -2784,7 +2785,7 @@ public class FileOpener {
         boolean useElevated = PrivilegeManager.Files.fileOpsOn(context)
                 && (PrivilegeManager.Staging.needsStaging(context, bakPath) || PrivilegeManager.Staging.needsStaging(context, origPath));
         if (useElevated) {
-            new Thread(() -> {
+            AppExecutors.io().execute(() -> {
                 try {
                     boolean origExists = PrivilegeManager.Files.exists(context, origPath) || origFile.exists();
                     if (origExists) PrivilegeManager.Files.rename(context, origPath, origPath + "_tmp_.bak", true);
@@ -2795,7 +2796,7 @@ public class FileOpener {
                 } catch (Exception e) {
                     context.handler.post(() -> new ErrorUtil(context).showError(e));
                 }
-            }).start();
+            });
             return;
         }
         boolean origExists = origFile.exists();
@@ -2828,7 +2829,7 @@ public class FileOpener {
                         switch (which) {
                             case 0:
                                 if (LegacyUtils.aboveSdk20) {
-                                    new Thread(() -> {
+                                    AppExecutors.io().execute(() -> {
                                         try (ZipFile zf = new ZipFile(readable)) {
                                             List<File> apkFiles = new ArrayList<>();
                                             File tmpDir = new File(context.getCacheDir(), "split_install_" + System.currentTimeMillis());
@@ -2861,7 +2862,7 @@ public class FileOpener {
                                         } catch (Exception e) {
                                             context.runOnUiThread(() -> new ErrorUtil(context).showError(e));
                                         }
-                                    }).start();
+                                    });
                                 } else {
                                     Extensions.showMessage(context, "Installing split APKs is not supported on this version of Android :(");
                                     context.handler.postDelayed(() -> Extensions.showMessage(context, "You could try merging the APK then installing it"), 1500);
@@ -2872,7 +2873,7 @@ public class FileOpener {
                                 break;
                             case 2:
                                 // App/APK Info of the base APK inside the APKS
-                                new Thread(() -> {
+                                AppExecutors.io().execute(() -> {
                                     try (ZipFile zf = new ZipFile(readable)) {
                                         FileHeader baseHeader = null;
                                         for (FileHeader fh : zf.getFileHeaders()) {
@@ -2905,7 +2906,7 @@ public class FileOpener {
                                     } catch (Exception e) {
                                         context.runOnUiThread(() -> new ErrorUtil(context).showError(e));
                                     }
-                                }).start();
+                                });
                                 break;
                             case 3:
                                 MergeUtil.showAntisplitDialog(readable, context);
