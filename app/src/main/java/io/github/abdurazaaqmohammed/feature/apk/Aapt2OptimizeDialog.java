@@ -31,6 +31,7 @@ import io.github.abdurazaaqmohammed.ui.main.UIHelper;
 import io.github.abdurazaaqmohammed.util.io.ProgressManager;
 import io.github.abdurazaaqmohammed.util.misc.ErrorUtil;
 import io.github.codehasan.colorpicker.extensions.Extensions;
+import io.github.abdurazaaqmohammed.util.misc.AppExecutors;
 
 /**
  * AAPT2 optimize dialog: scans the APK once, offers profiles and multi-select
@@ -43,7 +44,7 @@ final class Aapt2OptimizeDialog {
 
     static void show(MainActivity activity, UIHelper uiHelper, File input) {
         ProgressManager pm = new ProgressManager(activity, true).setText(activity.getString(R.string.aapt2_scanning)).show();
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             Aapt2ApkSpecs.Specs specs;
             try {
                 specs = Aapt2ApkSpecs.scan(input);
@@ -59,7 +60,7 @@ final class Aapt2OptimizeDialog {
                 if (activity.isFinishing()) return;
                 showDialog(activity, uiHelper, input, specs);
             });
-        }, "aapt2-scan").start();
+        });
     }
 
     private static void showDialog(MainActivity activity, UIHelper uiHelper, File input,
@@ -417,7 +418,7 @@ final class Aapt2OptimizeDialog {
         ProgressManager progress = new ProgressManager(activity, false);
         progress.setText(activity.getString(R.string.aapt2_installing));
         progress.show();
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 Aapt2BinaryManager.download(activity, (done, total) -> activity.handler.post(() -> {
                     if (total > 0) progress.setProgress((int) Math.min(1000, done * 1000 / total), 1000);
@@ -438,7 +439,7 @@ final class Aapt2OptimizeDialog {
                             .show();
                 });
             }
-        }, "aapt2-download").start();
+        });
     }
 
     private static String text(View view, int id) {
@@ -460,7 +461,7 @@ final class Aapt2OptimizeDialog {
                               Aapt2Optimizer.Options options, SignWrapper signer) {
         ProgressManager progress = new ProgressManager(activity, true).show();
         progress.setText(activity.getString(R.string.aapt2_optimize));
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             File output = null;
             try {
                 output = Aapt2Optimizer.optimize(activity, input, options);
@@ -476,6 +477,6 @@ final class Aapt2OptimizeDialog {
                 progress.dismiss();
                 activity.handler.post(() -> new ErrorUtil(activity).showError(e));
             }
-        }, "aapt2-optimize").start();
+        });
     }
 }
