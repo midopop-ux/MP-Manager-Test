@@ -11,12 +11,12 @@ import android.provider.DocumentsContract;
 import android.webkit.MimeTypeMap;
 
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.File;
 import java.util.ArrayList;
 
 import io.github.abdurazaaqmohammed.MPManager.R;
+import io.github.abdurazaaqmohammed.ui.common.base.BaseActivity;
 import io.github.abdurazaaqmohammed.ui.editor.FilePickerDialog;
 
 /**
@@ -36,7 +36,7 @@ import io.github.abdurazaaqmohammed.ui.editor.FilePickerDialog;
  * copy has to be made before the file is handed over, and a file in
  * {@code Android/data} is as openable as one on the sdcard.</p>
  */
-public class PickFileActivity extends AppCompatActivity {
+public class PickFileActivity extends BaseActivity {
 
     /** Must match the authority declared for the provider in the manifest. */
     public static final String AUTHORITY = "io.github.abdurazaaqmohammed.MPManager.documents";
@@ -45,9 +45,6 @@ public class PickFileActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
-        io.github.abdurazaaqmohammed.ui.common.theme.ThemeRegistry.applySaved(this);
-        io.github.abdurazaaqmohammed.ui.common.theme.ThemeRegistry.applyAccent(this);
-        io.github.abdurazaaqmohammed.ui.common.util.AppFont.installFactory(this);
         super.onCreate(savedInstanceState);
         Intent intent = getIntent();
         String action = intent == null ? null : intent.getAction();
