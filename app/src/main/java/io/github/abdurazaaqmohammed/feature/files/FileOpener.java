@@ -262,9 +262,91 @@ public class FileOpener {
             return;
         }
         final List<OpenWithOrder.Option> visibleOptions = new ArrayList<>();
-        final List<String> actionIds = new ArrayList<>();
-        final List<String> actionNames = new ArrayList<>();
-        final List<Integer> actionIcons = new ArrayList<>();
+        final List<String> actionIds = new ArrayList<>(Arrays.asList(
+                BUILTIN_TEXT, BUILTIN_ARCHIVE, BUILTIN_IMAGE,
+                BUILTIN_HEX, BUILTIN_MEDIA, BUILTIN_APK));
+        final List<String> actionNames = new ArrayList<>(Arrays.asList(
+                context.getString(R.string.text_editor),
+                context.getString(R.string.archive_viewer),
+                context.getString(R.string.image_viewer),
+                context.getString(R.string.hex_editor),
+                context.getString(R.string.media_player),
+                context.getString(R.string.apk_info)));
+        final List<Integer> actionIcons = new ArrayList<>(Arrays.asList(
+                R.drawable.baseline_text_snippet_24,
+                R.drawable.baseline_folder_zip_24,
+                R.drawable.image_24px,
+                R.drawable.ic_hash_mt,
+                R.drawable.video_24px,
+                R.drawable.apk_document_24px));
+        final List<Runnable> actionHandlers = new ArrayList<>(Arrays.asList(
+                () -> runBuiltinTool(BUILTIN_TEXT, file, fileName, zipFile, zipEntryPath),
+                () -> runBuiltinTool(BUILTIN_ARCHIVE, file, fileName, zipFile, zipEntryPath),
+                () -> runBuiltinTool(BUILTIN_IMAGE, file, fileName, zipFile, zipEntryPath),
+                () -> runBuiltinTool(BUILTIN_HEX, file, fileName, zipFile, zipEntryPath),
+                () -> runBuiltinTool(BUILTIN_MEDIA, file, fileName, zipFile, zipEntryPath),
+                () -> runBuiltinTool(BUILTIN_APK, file, fileName, zipFile, zipEntryPath)));
+        if (zipFile == null && originalFile != null && file != null
+                && !originalFile.getAbsolutePath().equals(file.getAbsolutePath())) {
+            actionHandlers.set(0, () -> openTextEditorWithOriginal(file, originalFile));
+            actionHandlers.set(3, () -> openHexEditorWithOriginal(file, originalFile));
+        }
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".ttf") || lower.endsWith(".otf") || lower.endsWith(".woff") || lower.endsWith(".woff2")) {
+            actionIds.add(BUILTIN_FONT);
+            actionNames.add(context.getString(R.string.font_preview));
+            actionIcons.add(R.drawable.uppercase_24px);
+            actionHandlers.add(() -> runBuiltinTool(BUILTIN_FONT, file, fileName, zipFile, zipEntryPath));
+        }
+        if (lower.endsWith(".pdf")) {
+            actionIds.add(BUILTIN_PDF);
+            actionNames.add(context.getString(R.string.pdf_viewer));
+            actionIcons.add(R.drawable.pdf_24px);
+            actionHandlers.add(() -> runBuiltinTool(BUILTIN_PDF, file, fileName, zipFile, zipEntryPath));
+        }
+        if (FileUtils.matchExt("." + FilenameUtils.getExtension(fileName).toLowerCase(Locale.ROOT), FileUtils.HTML_EXTS)) {
+            actionIds.add(BUILTIN_HTML);
+            actionNames.add(context.getString(R.string.html_viewer));
+            actionIcons.add(R.drawable.language_24px);
+            actionHandlers.add(() -> runBuiltinTool(BUILTIN_HTML, file, fileName, zipFile, zipEntryPath));
+        }
+        if (lower.endsWith(".arsc")) {
+            actionIds.add(BUILTIN_ARSC);
+            actionNames.add(context.getString(R.string.arsc_functions));
+            actionIcons.add(R.drawable.apk_document_24px);
+            actionHandlers.add(() -> runBuiltinTool(BUILTIN_ARSC, file, fileName, zipFile, zipEntryPath));
+        }
+        if (lower.endsWith(".xml")) {
+            actionIds.add(BUILTIN_XML);
+            actionNames.add(context.getString(R.string.xml_functions));
+            actionIcons.add(R.drawable.code_24px);
+            actionHandlers.add(() -> runBuiltinTool(BUILTIN_XML, file, fileName, zipFile, zipEntryPath));
+        }
+        // A drawable XML is a picture, not a document. Offer the rendered
+        // preview wherever an XML file can be opened (archive entries keep
+        // their full res/ path, loose files are sniffed by root tag).
+        if (lower.endsWith(".xml") && isDrawableXml(file, zipFile, zipEntryPath)) {
+            actionIds.add(BUILTIN_DRAWABLE);
+            actionNames.add(context.getString(R.string.drawable_preview));
+            actionIcons.add(R.drawable.image_24px);
+            actionHandlers.add(() -> runBuiltinTool(BUILTIN_DRAWABLE, file, fileName,
+                    zipFile, zipEntryPath));
+        }
+        String keyExt = FilenameUtils.getExtension(fileName).toLowerCase(Locale.ROOT);
+        if (keyExt.equals("jks") || keyExt.equals("keystore") || keyExt.equals("p12")
+                || keyExt.equals("pfx") || keyExt.equals("pk8") || keyExt.equals("pem")) {
+            actionIds.add(BUILTIN_SIG);
+            actionNames.add(context.getString(R.string.import_signature));
+            actionIcons.add(R.drawable.lock_24px);
+            actionHandlers.add(() -> runBuiltinTool(BUILTIN_SIG, file, fileName, zipFile, zipEntryPath));
+        }
+        if (keyExt.equals("db") || keyExt.equals("sqlite") || keyExt.equals("sqlite3") || keyExt.equals("db3")
+                || isDatabaseFile(file, fileName)) {
+            actionIds.add(BUILTIN_SQLITE);
+            actionNames.add(context.getString(R.string.sqlite_viewer));
+            actionIcons.add(R.drawable.ic_disk_drive_24px);
+            actionHandlers.add(() -> runBuiltinTool(BUILTIN_SQLITE, file, fileName, zipFile, zipEntryPath));
+        }
 
         GridView gridView = new GridView(context);
         gridView.setNumColumns(3);
@@ -633,6 +715,19 @@ public class FileOpener {
             default:
                 return;
         }
+    }
+
+    /**
+     * App databases often have no extension ("settings", "user"), so an
+     * extension-only check hides the advertised editor exactly where users
+     * need it. Anything inside an app's databases/ folder is a DB candidate;
+     * SQLite journal sidecars are not.
+     */
+    private static boolean isDatabaseFile(File file, String name) {
+        if (file == null || name == null) return false;
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (lower.endsWith("-wal") || lower.endsWith("-shm") || lower.endsWith("-journal")) return false;
+        return file.getAbsolutePath().replace('\\', '/').contains("/databases/");
     }
 
     private void openSqliteViewer(File file) {
@@ -1860,7 +1955,8 @@ public class FileOpener {
                 });
             } else if (fileName.equals("libapp.so") || fileName.equals("libflutter.so")) {
                 withReadableCopy(file, readable -> FlutterToolsDialog.showForLibrary(context, readable, fileName));
-            } else if (ext.equals(".db") || ext.equals(".sqlite") || ext.equals(".sqlite3") || ext.equals(".db3")) {
+            } else if (ext.equals(".db") || ext.equals(".sqlite") || ext.equals(".sqlite3") || ext.equals(".db3")
+                    || isDatabaseFile(file, fileName)) {
                 openSqliteViewer(file);
             } else if (ArchiveBrowseUtil.isBrowsable(file)) {
                 // Unhandled extension but the bytes are an archive (zip/7z/rar/
