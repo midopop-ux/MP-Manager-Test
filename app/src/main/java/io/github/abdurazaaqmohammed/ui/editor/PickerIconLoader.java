@@ -28,6 +28,7 @@ import org.apache.commons.io.FilenameUtils;
 
 import io.github.abdurazaaqmohammed.ui.common.theme.ThemeRegistry;
 import io.github.abdurazaaqmohammed.ui.main.FileIconSpec;
+import io.github.abdurazaaqmohammed.ui.viewer.SvgRenderer;
 import io.github.abdurazaaqmohammed.util.text.FileSize;
 import io.github.abdurazaaqmohammed.util.io.FileUtils;
 
@@ -189,6 +190,9 @@ public class PickerIconLoader {
         try {
             File f = new File(filePath);
             if (!f.canRead()) return null;
+            if (SvgRenderer.isSvgName(filePath)) {
+                return SvgRenderer.decodeThumbnail(filePath, 160);
+            }
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inJustDecodeBounds = true;
             BitmapFactory.decodeFile(filePath, options);

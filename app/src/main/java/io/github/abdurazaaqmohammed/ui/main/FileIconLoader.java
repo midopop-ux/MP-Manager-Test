@@ -2,6 +2,7 @@ package io.github.abdurazaaqmohammed.ui.main;
 
 import io.github.abdurazaaqmohammed.privilege.api.PrivilegeManager;
 import io.github.abdurazaaqmohammed.feature.apk.ApkIconHelper;
+import io.github.abdurazaaqmohammed.ui.viewer.SvgRenderer;
 import io.github.abdurazaaqmohammed.util.misc.StickerUtil;
 import io.github.abdurazaaqmohammed.data.prefs.UiPrefs;
 
@@ -378,6 +379,9 @@ public class FileIconLoader {
     }
 
     private static Bitmap decodeZipBitmap(File zip, String entryPath) {
+        if (SvgRenderer.isSvgName(entryPath)) {
+            return SvgRenderer.decodeBytes(readZipEntry(zip, entryPath), THUMB_RENDER_PX);
+        }
         try (InputStream in = ArchiveBrowseUtil.openEntry(zip, entryPath)) {
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inJustDecodeBounds = true;
@@ -1615,6 +1619,9 @@ public class FileIconLoader {
 
     public static Bitmap loadImageThumbnail(String path) {
         if (SafFs.isSafPath(path)) {
+            if (SvgRenderer.isSvgName(path)) {
+                return SvgRenderer.decodeThumbnail(path, 160);
+            }
             // Provider documents have no readable path: decode through the
             // ContentResolver stream (bounds pass, then the scaled pass).
             try (InputStream in = FileUtils.getInputStream(new File(path))) {
@@ -1661,6 +1668,9 @@ public class FileIconLoader {
         try {
             File f = new File(filePath);
             if (!f.canRead()) return null;
+            if (SvgRenderer.isSvgName(filePath)) {
+                return SvgRenderer.decodeThumbnail(filePath, 160);
+            }
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inJustDecodeBounds = true;
             BitmapFactory.decodeFile(filePath, options);
@@ -1691,6 +1701,9 @@ public class FileIconLoader {
             PrivilegeManager.Root.streamFromRoot(App.getInstance(), path, baos, 2 * 1024 * 1024); // Up to 2MB for thumbnail
             byte[] data = baos.toByteArray();
             if (data == null || data.length == 0) return null;
+            if (SvgRenderer.isSvgName(path)) {
+                return SvgRenderer.decodeBytes(data, 160);
+            }
 
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inJustDecodeBounds = true;
