@@ -25,6 +25,13 @@ public record FileIconSpec(int glyph, int background, int foreground, int label)
     public static final FileIconSpec STICKER = spec(R.drawable.ic_sticker_24px, 0xFF00897B, R.string.shortcut_icon_sticker);
     public static final FileIconSpec PDF = spec(R.drawable.pdf_24px, 0xFFAD1457, R.string.shortcut_icon_pdf);
     public static final FileIconSpec TEXT = spec(R.drawable.baseline_text_snippet_24, 0xFF1565C0, R.string.shortcut_icon_text);
+    public static final FileIconSpec JAVA = spec(R.drawable.code_24px, 0xFFE65100, R.string.shortcut_icon_java);
+    public static final FileIconSpec KOTLIN = spec(R.drawable.code_24px, 0xFF7F52FF, R.string.shortcut_icon_kotlin);
+    public static final FileIconSpec XML = spec(R.drawable.code_24px, 0xFF0277BD, R.string.shortcut_icon_xml);
+    public static final FileIconSpec JSON = spec(R.drawable.code_24px, 0xFF2E7D32, R.string.shortcut_icon_json);
+    public static final FileIconSpec PYTHON = spec(R.drawable.code_24px, 0xFF306998, R.string.shortcut_icon_python);
+    public static final FileIconSpec SMALI = spec(R.drawable.code_24px, 0xFF00897B, R.string.shortcut_icon_smali);
+    public static final FileIconSpec JS = spec(R.drawable.code_24px, 0xFFF9A825, R.string.shortcut_icon_js);
     public static final FileIconSpec ELF = spec(R.drawable.terminal_24px, 0xFF37474F, R.string.shortcut_icon_elf);
     public static final FileIconSpec DISK = spec(R.drawable.ic_disk_drive_24px, 0xFF455A64, R.string.shortcut_icon_disk);
     public static final FileIconSpec DATABASE = spec(R.drawable.ic_database_24px, 0xFF00695C, R.string.shortcut_icon_database);
@@ -43,7 +50,23 @@ public record FileIconSpec(int glyph, int background, int foreground, int label)
 
     public static List<FileIconSpec> all() {
         return List.of(FOLDER, FILE, APK, IMAGE, VIDEO, AUDIO, DEX, ARSC, ARCHIVE, STICKER, PDF, TEXT,
+                JAVA, KOTLIN, XML, JSON, PYTHON, SMALI, JS,
                 ELF, DISK, DATABASE, FONT, BINARY, PROTO, DOCUMENT, SHEET, SLIDE, SCRIPT, BACKUP, CERTIFICATE);
+    }
+
+    /** Returns the distinct code/markup FileIconSpec for a dotted lowercase extension, or null. */
+    public static FileIconSpec codeSpecForExt(String extWithDot) {
+        if (extWithDot == null) return null;
+        return switch (extWithDot) {
+            case ".java" -> JAVA;
+            case ".kt", ".kts" -> KOTLIN;
+            case ".xml", ".axml", ".html", ".htm", ".xhtml" -> XML;
+            case ".json", ".yaml", ".yml", ".toml" -> JSON;
+            case ".py", ".pyw" -> PYTHON;
+            case ".smali" -> SMALI;
+            case ".js", ".mjs", ".cjs", ".ts", ".mts", ".jsx", ".tsx" -> JS;
+            default -> null;
+        };
     }
 
     public static FileIconSpec forPath(String path, boolean directory) {
@@ -62,7 +85,8 @@ public record FileIconSpec(int glyph, int background, int foreground, int label)
         if (extension.equals(".pdf")) return PDF;
         if (extension.equals(".dex")) return DEX;
         if (extension.equals(".arsc")) return ARSC;
-        if (FileUtils.matchExt(extension, FileUtils.TEXT_EXTS)) return TEXT;
+        FileIconSpec codeSpec = codeSpecForExt(extension);
+        if (codeSpec != null) return codeSpec;
         if (FileIconLoader.isDatabaseExt(extension)) return DATABASE;
         if (FileIconLoader.isFontExt(extension)) return FONT;
         if (FileIconLoader.isBinaryExt(extension)) return BINARY;
@@ -73,6 +97,7 @@ public record FileIconSpec(int glyph, int background, int foreground, int label)
         if (FileIconLoader.isScriptExt(extension)) return SCRIPT;
         if (FileIconLoader.isBackupExt(extension)) return BACKUP;
         if (FileIconLoader.isCertExt(extension)) return CERTIFICATE;
+        if (FileUtils.matchExt(extension, FileUtils.TEXT_EXTS)) return TEXT;
         if (List.of(".img", ".iso", ".vdi", ".vhd", ".vhdx", ".vmdk", ".qcow2", ".ext4", ".wad", ".payload").contains(extension)
                 || "payload.bin".equalsIgnoreCase(FilenameUtils.getName(path))) return DISK;
         if (FileUtils.isElf(path)) return ELF;

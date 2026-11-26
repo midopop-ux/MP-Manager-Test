@@ -96,11 +96,18 @@ public class PickerIconLoader {
             fileIconView.setImageDrawable(cachedArchiveIcon);
         } else if (".pdf".equals(ext)) {
             fileIconView.setImageDrawable(cachedPdfIcon);
-        } else if (FileUtils.matchExt(ext, FileUtils.TEXT_EXTS)) {
-            fileIconView.setImageDrawable(cachedTextIcon);
         } else {
-            FileIconSpec resolved = FileIconSpec.forPath(path, false);
-            fileIconView.setImageDrawable(resolved == FileIconSpec.FILE ? cachedFileIcon : resolved.drawable(context));
+            FileIconSpec codeSpec = FileIconSpec.codeSpecForExt(ext);
+            if (codeSpec != null) {
+                fileIconView.setImageDrawable(codeSpec.drawable(context));
+            } else {
+                FileIconSpec resolved = FileIconSpec.forPath(path, false);
+                if (resolved == FileIconSpec.TEXT) {
+                    fileIconView.setImageDrawable(cachedTextIcon);
+                } else {
+                    fileIconView.setImageDrawable(resolved == FileIconSpec.FILE ? cachedFileIcon : resolved.drawable(context));
+                }
+            }
         }
     }
 

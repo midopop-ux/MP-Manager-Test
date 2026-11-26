@@ -27,7 +27,7 @@ import io.github.abdurazaaqmohammed.ui.common.theme.ThemeRegistry;
 public final class FileIconArt {
 
     private static final float ARTBOARD = 100f;
-    private static final LruCache<String, Bitmap> BITMAP_CACHE = new LruCache<>(96);
+    private static final LruCache<String, Bitmap> BITMAP_CACHE = new LruCache<>(128);
 
     private FileIconArt() {}
 
@@ -101,6 +101,13 @@ public final class FileIconArt {
         if (spec == FileIconSpec.STICKER) return "STICKER";
         if (spec == FileIconSpec.PDF) return "PDF";
         if (spec == FileIconSpec.TEXT) return "TEXT";
+        if (spec == FileIconSpec.JAVA) return "JAVA";
+        if (spec == FileIconSpec.KOTLIN) return "KOTLIN";
+        if (spec == FileIconSpec.XML) return "XML";
+        if (spec == FileIconSpec.JSON) return "JSON";
+        if (spec == FileIconSpec.PYTHON) return "PYTHON";
+        if (spec == FileIconSpec.SMALI) return "SMALI";
+        if (spec == FileIconSpec.JS) return "JS";
         if (spec == FileIconSpec.ELF) return "ELF";
         if (spec == FileIconSpec.DISK) return "DISK";
         if (spec == FileIconSpec.DATABASE) return "DATABASE";
@@ -136,6 +143,20 @@ public final class FileIconArt {
             drawPdfCard3D(c, dark);
         } else if (spec == FileIconSpec.TEXT) {
             drawTextCard3D(c, dark);
+        } else if (spec == FileIconSpec.JAVA) {
+            drawCodeLanguageCard3D(c, 0xFFE65100, 0xFFFF9800, 0xFFD84315, "JAVA", 17f, Color.WHITE, dark);
+        } else if (spec == FileIconSpec.KOTLIN) {
+            drawCodeLanguageCard3D(c, 0xFF7F52FF, 0xFFE44857, 0xFF6A1B9A, "KT", 21f, Color.WHITE, dark);
+        } else if (spec == FileIconSpec.XML) {
+            drawCodeLanguageCard3D(c, 0xFF0288D1, 0xFF29B6F6, 0xFF01579B, "</>", 19.5f, Color.WHITE, dark);
+        } else if (spec == FileIconSpec.JSON) {
+            drawCodeLanguageCard3D(c, 0xFF2E7D32, 0xFF66BB6A, 0xFF1B5E20, "{ }", 19.5f, Color.WHITE, dark);
+        } else if (spec == FileIconSpec.PYTHON) {
+            drawCodeLanguageCard3D(c, 0xFF306998, 0xFF4B8BBE, 0xFF1D4E78, "PY", 21f, 0xFFFFD43B, dark);
+        } else if (spec == FileIconSpec.SMALI) {
+            drawCodeLanguageCard3D(c, 0xFF00897B, 0xFF4DB6AC, 0xFF00695C, ".S", 21f, Color.WHITE, dark);
+        } else if (spec == FileIconSpec.JS) {
+            drawCodeLanguageCard3D(c, 0xFFF9A825, 0xFFFFEE58, 0xFFF57F17, "JS", 21f, 0xFF212121, dark);
         } else if (spec == FileIconSpec.DOCUMENT) {
             drawDocumentCard3D(c, dark);
         } else if (spec == FileIconSpec.SHEET) {
@@ -735,6 +756,29 @@ public final class FileIconArt {
         c.drawRoundRect(new RectF(26f, 48f, 73f, 54f), 3f, 3f, lineBlue);
         c.drawRoundRect(new RectF(26f, 60f, 73f, 66f), 3f, 3f, lineBlue);
         c.drawRoundRect(new RectF(26f, 72f, 58f, 78f), 3f, 3f, lineBlue);
+    }
+
+    private static void drawCodeLanguageCard3D(Canvas c, int pageAccent, int badgeTop, int badgeBot,
+                                               String label, float textSize, int textColor, boolean dark) {
+        int[] p = tintedPageColors(pageAccent, dark);
+        drawFoldedPage(c, 22f, p[0], p[1], p[2], p[3], p[4], dark);
+
+        RectF badge = new RectF(9f, 29f, 68f, 58f);
+        int mid = ColorUtils.blendARGB(badgeTop, badgeBot, 0.5f);
+        drawRoundedTile3D(c, badge, 8f, badgeTop, mid, badgeBot, dark);
+
+        Paint text = fillPaint(textColor);
+        text.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
+        text.setTextSize(textSize);
+        text.setTextAlign(Paint.Align.CENTER);
+        Paint.FontMetrics fm = text.getFontMetrics();
+        float baseline = badge.centerY() - (fm.ascent + fm.descent) * 0.5f;
+        c.drawText(label, badge.centerX(), baseline, text);
+
+        Paint barPrimary = fillPaint(withAlpha(pageAccent, dark ? 0x85 : 0x65));
+        Paint barSecondary = fillPaint(withAlpha(pageAccent, dark ? 0x55 : 0x3C));
+        c.drawRoundRect(new RectF(25f, 66f, 63f, 71f), 2.5f, 2.5f, barPrimary);
+        c.drawRoundRect(new RectF(31f, 76f, 73f, 81f), 2.5f, 2.5f, barSecondary);
     }
 
     // ---------- 12. Document (Word) 3D Card ----------
