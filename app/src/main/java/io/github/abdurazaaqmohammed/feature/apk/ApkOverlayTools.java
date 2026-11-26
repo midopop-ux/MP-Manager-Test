@@ -338,6 +338,8 @@ public class ApkOverlayTools {
         boolean animOn;
         int animMs = 500;
         int titleC;
+        MaterialAutoCompleteTextView hookMethodTv;
+        MaterialSwitch protectCodeSwitch;
     }
 
     private OverlayForm fillForm(View view) {
@@ -377,6 +379,8 @@ public class ApkOverlayTools {
         f.videoWarnTv = view.findViewById(R.id.overlayDlgVideoWarn);
         f.dlgHtml = view.findViewById(R.id.overlayDlgHtml);
         f.dlgB64 = view.findViewById(R.id.overlayDlgB64);
+        f.hookMethodTv = view.findViewById(R.id.overlayHookMethod);
+        f.protectCodeSwitch = view.findViewById(R.id.overlayProtectCode);
         f.toastSection = view.findViewById(R.id.overlayToastSection);
         f.dialogSection = view.findViewById(R.id.overlayDialogSection);
         f.posBox = view.findViewById(R.id.overlayPosBox);
@@ -427,11 +431,17 @@ public class ApkOverlayTools {
         toast.yOffset = clampOffset(textOf(f.yInput));
         toast.html = f.toastHtml.isChecked();
         toast.base64 = f.toastB64.isChecked();
+        toast.hookMethod = selectedHookMethod(f);
+        toast.protectCode = f.protectCodeSwitch != null && f.protectCodeSwitch.isChecked();
         if (toast.message.isEmpty()) {
             Extensions.showMessage(context, "Enter a message");
             return null;
         }
         return toast;
+    }
+
+    private String selectedHookMethod(OverlayForm f) {
+        return "onResume".equals(textOf(f.hookMethodTv)) ? "onResume" : "onCreate";
     }
 
     private void applyBehaviorToOptions(OverlayForm f, OverlayInjectorUtil.DialogOptions dlg) {
@@ -441,6 +451,8 @@ public class ApkOverlayTools {
         dlg.showOnce = showOnceLabel.equals(showMode);
         dlg.dontShowAgain = dontShowLabel.equals(showMode);
         dlg.draggable = f.movableSwitch != null && f.movableSwitch.isChecked();
+        dlg.hookMethod = selectedHookMethod(f);
+        dlg.protectCode = f.protectCodeSwitch != null && f.protectCodeSwitch.isChecked();
     }
 
     private OverlayInjectorUtil.DialogOptions collectDialog(OverlayForm f) {
@@ -576,6 +588,15 @@ public class ApkOverlayTools {
         if (e != null) e.setText(s == null ? "" : s);
     }
 
+    private static void applyProtectionUi(OverlayForm f, String hookMethod, boolean protectCode) {
+        if (f.hookMethodTv != null) {
+            f.hookMethodTv.setText("onResume".equals(hookMethod) ? "onResume" : "onCreate", false);
+        }
+        if (f.protectCodeSwitch != null) {
+            f.protectCodeSwitch.setChecked(protectCode);
+        }
+    }
+
     private void applyToast(OverlayForm f, OverlayInjectorUtil.ToastOptions o) {
         setText(f.messageInput, o.message);
         f.durationTv.setText(o.longDuration ? "Long" : "Short", false);
@@ -584,6 +605,7 @@ public class ApkOverlayTools {
         setText(f.yInput, String.valueOf(o.yOffset));
         f.toastHtml.setChecked(o.html);
         f.toastB64.setChecked(o.base64);
+        applyProtectionUi(f, o.hookMethod, o.protectCode);
     }
 
     private void applyDialog(OverlayForm f, OverlayInjectorUtil.DialogOptions o) {
@@ -603,6 +625,7 @@ public class ApkOverlayTools {
         if (f.movableSwitch != null) f.movableSwitch.setChecked(o.draggable);
         f.dlgHtml.setChecked(o.html);
         f.dlgB64.setChecked(o.base64);
+        applyProtectionUi(f, o.hookMethod, o.protectCode);
         f.bgSwitch.setChecked(o.bgEnabled);
         f.bgC1 = o.bgColor1;
         f.bgC2 = o.bgColor2;
@@ -2365,6 +2388,13 @@ public class ApkOverlayTools {
             neuBox.setVisibility(View.GONE);
             view.findViewById(R.id.overlayNeuAddBtn).setVisibility(View.VISIBLE);
         });
+
+        if (form.hookMethodTv != null) {
+            form.hookMethodTv.setAdapter(new ArrayAdapter<>(context,
+                    android.R.layout.simple_dropdown_item_1line,
+                    new String[]{"onCreate", "onResume"}));
+            form.hookMethodTv.setText("onCreate", false);
+        }
 
         MaterialCheckBox autosign = view.findViewById(R.id.overlayAutosign);
         autosign.setChecked(sign[0] = settings.getBoolean("autosign", true));

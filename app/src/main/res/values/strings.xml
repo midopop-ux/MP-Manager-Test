@@ -1620,6 +1620,9 @@ Strings are sent to the external service you configured.</string>
     <string name="movable_dialog">Movable (draggable)</string>
     <string name="countdown_auto_dismiss">Auto-dismiss countdown (Splash)</string>
     <string name="countdown_seconds">Countdown seconds</string>
+    <string name="overlay_hook_method">Hook method</string>
+    <string name="protect_calling_code">Protect calling code</string>
+    <string name="protect_calling_code_summary">Obfuscate helper classes, hide hook calls via reflection, and encrypt text strings</string>
     <string name="dialog_image">Dialog image</string>
     <string name="dialog_media">Dialog media</string>
     <string name="media_none">None</string>

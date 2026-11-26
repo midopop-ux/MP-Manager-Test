@@ -1004,6 +1004,35 @@
                 android:layout_marginTop="8dp" />
         </LinearLayout>
 
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:hint="@string/overlay_hook_method">
+
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/overlayHookMethod"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/overlayProtectCode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/protect_calling_code" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:alpha="0.7"
+            android:text="@string/protect_calling_code_summary"
+            android:textSize="12sp" />
+
         <com.google.android.material.checkbox.MaterialCheckBox
             android:id="@+id/overlayAutosign"
             android:layout_width="wrap_content"
