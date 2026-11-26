@@ -13,11 +13,11 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 
-import com.airbnb.android.lottie.LottieAnimationView;
-import com.airbnb.android.lottie.LottieComposition;
-import com.airbnb.android.lottie.LottieCompositionFactory;
-import com.airbnb.android.lottie.LottieDrawable;
-import com.airbnb.android.lottie.LottieResult;
+import com.airbnb.lottie.LottieAnimationView;
+import com.airbnb.lottie.LottieComposition;
+import com.airbnb.lottie.LottieCompositionFactory;
+import com.airbnb.lottie.LottieDrawable;
+import com.airbnb.lottie.LottieResult;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.File;
