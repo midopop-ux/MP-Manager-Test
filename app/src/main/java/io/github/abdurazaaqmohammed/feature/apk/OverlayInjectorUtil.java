@@ -127,6 +127,8 @@ public class OverlayInjectorUtil {
         public String dlgFont = "";
         public String dlgFontPath = "";
         public List<AdvWidget> widgets;
+        public boolean countdown;
+        public int countdownSeconds = 3;
     }
 
     public static AdvWidget copyWidget(AdvWidget w) {
@@ -439,6 +441,19 @@ public class OverlayInjectorUtil {
                                     String noshowListener, String blinkListener,
                                     String dismissListener, Map<String, String> fontAssets,
                                     String waveRgb, String dragListener, String videoHelper) {
+        String base = classDescriptor.substring(0, classDescriptor.length() - 1);
+        String countdownHelper = opts != null && opts.countdown ? base + "$mpCountdown;" : null;
+        return dialogHelperSmali(classDescriptor, opts, urlListener, urlViewListener,
+                noshowListener, blinkListener, dismissListener, fontAssets, waveRgb,
+                dragListener, videoHelper, countdownHelper);
+    }
+
+    static String dialogHelperSmali(String classDescriptor, DialogOptions opts,
+                                    String urlListener, String urlViewListener,
+                                    String noshowListener, String blinkListener,
+                                    String dismissListener, Map<String, String> fontAssets,
+                                    String waveRgb, String dragListener, String videoHelper,
+                                    String countdownHelper) {
         boolean titleColored = opts.titleColor != 0;
         boolean msgColored = opts.msgColor != 0;
         boolean btnColored = opts.btnColor != 0;
@@ -454,11 +469,12 @@ public class OverlayInjectorUtil {
         boolean useVideo = hasVideo(opts) && videoHelper != null;
         boolean useImage = !useVideo && opts.imageBase64 != null && !opts.imageBase64.isEmpty();
         boolean useAdvanced = opts.advanced && opts.widgets != null && !opts.widgets.isEmpty();
+        boolean useCountdown = !useAdvanced && opts.countdown && opts.countdownSeconds > 0 && countdownHelper != null;
         boolean useDlgFont = needsFontWalk(opts);
         boolean useDrag = opts.draggable && dragListener != null;
         StringBuilder sb = new StringBuilder();
         sb.append(".method private ").append(DIALOG_HELPER).append("()V\n");
-        sb.append("    .locals ").append(useAdvanced ? 8 : (useAnim || useDlgFont || useWave) ? 6 : 5).append("\n");
+        sb.append("    .locals ").append((useAdvanced || useCountdown) ? 8 : (useAnim || useDlgFont || useWave) ? 6 : 5).append("\n");
         if (opts.dontShowAgain) {
             sb.append("    invoke-static {p0}, Landroid/preference/PreferenceManager;->getDefaultSharedPreferences(Landroid/content/Context;)Landroid/content/SharedPreferences;\n");
             sb.append("    move-result-object v0\n");
@@ -562,7 +578,9 @@ public class OverlayInjectorUtil {
             }
             }
         }
-        if (useVideo && !useAdvanced) {
+        if (useCountdown) {
+            sb.append(buildCountdownContainerSmali(opts, useVideo ? videoHelper : null, useImage));
+        } else if (useVideo && !useAdvanced) {
             sb.append("    const-string v1, \"").append(VIDEO_ASSET_NAME).append("\"\n");
             sb.append("    invoke-static {p0, v1}, ").append(videoHelper).append("->create(Landroid/content/Context;Ljava/lang/String;)Landroid/view/View;\n");
             sb.append("    move-result-object v2\n");
@@ -593,8 +611,21 @@ public class OverlayInjectorUtil {
             sb.append("    sput-object v5, ").append(dismissListener).append("->dlg:Landroid/content/DialogInterface;\n");
             resultTaken = true;
         }
-        if ((useDlgFont || useBg || useDrag) && !resultTaken) {
+        if ((useDlgFont || useBg || useDrag || useCountdown) && !resultTaken) {
             sb.append("    move-result-object v0\n");
+        }
+        if (useCountdown) {
+            sb.append("    invoke-static {}, Landroid/os/Looper;->getMainLooper()Landroid/os/Looper;\n");
+            sb.append("    move-result-object v1\n");
+            sb.append("    new-instance v2, Landroid/os/Handler;\n");
+            sb.append("    invoke-direct {v2, v1}, Landroid/os/Handler;-><init>(Landroid/os/Looper;)V\n");
+            sb.append("    new-instance v3, ").append(countdownHelper).append("\n");
+            appendConstInt(sb, 1, Math.max(1, opts.countdownSeconds));
+            sb.append("    invoke-direct {v3, v0, v7, v2, v1}, ").append(countdownHelper)
+                    .append("-><init>(Landroid/app/AlertDialog;Landroid/widget/TextView;Landroid/os/Handler;I)V\n");
+            sb.append("    const-wide v5, 0x3e8L\n");
+            sb.append("    invoke-virtual {v2, v3, v5, v6}, Landroid/os/Handler;->postDelayed(Ljava/lang/Runnable;J)Z\n");
+            sb.append("    move-result v1\n");
         }
         if (useDlgFont) {
             String dlgAsset = fontAssetName(opts.dlgFontPath, fontAssets);
@@ -1483,6 +1514,138 @@ public class OverlayInjectorUtil {
                 ".end method\n";
     }
 
+    private static String buildCountdownContainerSmali(DialogOptions opts, String videoHelper, boolean useImage) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("    new-instance v6, Landroid/widget/LinearLayout;\n");
+        sb.append("    invoke-direct {v6, p0}, Landroid/widget/LinearLayout;-><init>(Landroid/content/Context;)V\n");
+        sb.append("    const/4 v1, 0x1\n");
+        sb.append("    invoke-virtual {v6, v1}, Landroid/widget/LinearLayout;->setOrientation(I)V\n");
+        appendDpToPx(sb, Float.floatToRawIntBits(16f), 2, 3, 1);
+        sb.append("    float-to-int v7, v2\n");
+        appendDpToPx(sb, Float.floatToRawIntBits(10f), 2, 3, 1);
+        sb.append("    float-to-int v2, v2\n");
+        sb.append("    invoke-virtual {v6, v7, v2, v7, v2}, Landroid/widget/LinearLayout;->setPadding(IIII)V\n");
+        if (videoHelper != null) {
+            sb.append("    const-string v1, \"").append(VIDEO_ASSET_NAME).append("\"\n");
+            sb.append("    invoke-static {p0, v1}, ").append(videoHelper).append("->create(Landroid/content/Context;Ljava/lang/String;)Landroid/view/View;\n");
+            sb.append("    move-result-object v2\n");
+            sb.append("    invoke-virtual {v6, v2}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;)V\n");
+        } else if (useImage) {
+            sb.append("    const-string v1, \"").append(opts.imageBase64).append("\"\n");
+            sb.append("    const/4 v2, 0x0\n");
+            sb.append("    invoke-static {v1, v2}, Landroid/util/Base64;->decode(Ljava/lang/String;I)[B\n");
+            sb.append("    move-result-object v1\n");
+            sb.append("    const/4 v2, 0x0\n");
+            sb.append("    array-length v3, v1\n");
+            sb.append("    invoke-static {v1, v2, v3}, Landroid/graphics/BitmapFactory;->decodeByteArray([BII)Landroid/graphics/Bitmap;\n");
+            sb.append("    move-result-object v1\n");
+            sb.append("    new-instance v2, Landroid/widget/ImageView;\n");
+            sb.append("    invoke-direct {v2, p0}, Landroid/widget/ImageView;-><init>(Landroid/content/Context;)V\n");
+            sb.append("    const/4 v3, 0x1\n");
+            sb.append("    invoke-virtual {v2, v3}, Landroid/widget/ImageView;->setAdjustViewBounds(Z)V\n");
+            sb.append("    invoke-virtual {v2, v1}, Landroid/widget/ImageView;->setImageBitmap(Landroid/graphics/Bitmap;)V\n");
+            sb.append("    invoke-virtual {v6, v2}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;)V\n");
+        }
+        sb.append("    new-instance v1, Landroid/widget/LinearLayout;\n");
+        sb.append("    invoke-direct {v1, p0}, Landroid/widget/LinearLayout;-><init>(Landroid/content/Context;)V\n");
+        sb.append("    const/4 v2, 0x0\n");
+        sb.append("    invoke-virtual {v1, v2}, Landroid/widget/LinearLayout;->setOrientation(I)V\n");
+        sb.append("    const/16 v2, 0x11\n");
+        sb.append("    invoke-virtual {v1, v2}, Landroid/widget/LinearLayout;->setGravity(I)V\n");
+        float topPad = (videoHelper != null || useImage) ? 12f : 4f;
+        appendDpToPx(sb, Float.floatToRawIntBits(topPad), 2, 3, 5);
+        sb.append("    float-to-int v2, v2\n");
+        sb.append("    const/4 v3, 0x0\n");
+        sb.append("    invoke-virtual {v1, v3, v2, v3, v3}, Landroid/widget/LinearLayout;->setPadding(IIII)V\n");
+        sb.append("    new-instance v2, Landroid/widget/ProgressBar;\n");
+        sb.append("    invoke-direct {v2, p0}, Landroid/widget/ProgressBar;-><init>(Landroid/content/Context;)V\n");
+        appendDpToPx(sb, Float.floatToRawIntBits(28f), 3, 5, 7);
+        sb.append("    float-to-int v3, v3\n");
+        sb.append("    new-instance v5, Landroid/widget/LinearLayout$LayoutParams;\n");
+        sb.append("    invoke-direct {v5, v3, v3}, Landroid/widget/LinearLayout$LayoutParams;-><init>(II)V\n");
+        sb.append("    invoke-virtual {v1, v2, v5}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V\n");
+        appendDpToPx(sb, Float.floatToRawIntBits(12f), 3, 5, 2);
+        sb.append("    float-to-int v3, v3\n");
+        sb.append("    new-instance v2, Landroid/widget/LinearLayout$LayoutParams;\n");
+        sb.append("    const/4 v5, -0x2\n");
+        sb.append("    invoke-direct {v2, v5, v5}, Landroid/widget/LinearLayout$LayoutParams;-><init>(II)V\n");
+        sb.append("    iput v3, v2, Landroid/view/ViewGroup$MarginLayoutParams;->leftMargin:I\n");
+        sb.append("    new-instance v7, Landroid/widget/TextView;\n");
+        sb.append("    invoke-direct {v7, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V\n");
+        sb.append("    const-string v3, \"").append(Math.max(1, opts.countdownSeconds)).append("\"\n");
+        sb.append("    invoke-virtual {v7, v3}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V\n");
+        sb.append("    const/4 v3, 0x2\n");
+        sb.append("    const v5, 0x").append(Integer.toHexString(Float.floatToRawIntBits(16f))).append("\n");
+        sb.append("    invoke-virtual {v7, v3, v5}, Landroid/widget/TextView;->setTextSize(IF)V\n");
+        sb.append("    sget-object v3, Landroid/graphics/Typeface;->DEFAULT_BOLD:Landroid/graphics/Typeface;\n");
+        sb.append("    invoke-virtual {v7, v3}, Landroid/widget/TextView;->setTypeface(Landroid/graphics/Typeface;)V\n");
+        if (opts.msgColor != 0) {
+            sb.append("    const v3, 0x").append(Integer.toHexString(opts.msgColor)).append("\n");
+            sb.append("    invoke-virtual {v7, v3}, Landroid/widget/TextView;->setTextColor(I)V\n");
+        }
+        sb.append("    invoke-virtual {v1, v7, v2}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V\n");
+        sb.append("    invoke-virtual {v6, v1}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;)V\n");
+        sb.append("    invoke-virtual {v0, v6}, Landroid/app/AlertDialog$Builder;->setView(Landroid/view/View;)Landroid/app/AlertDialog$Builder;\n");
+        sb.append("    move-result-object v0\n");
+        return sb.toString();
+    }
+
+    static String countdownSmali(String countdownType) {
+        return ".class public " + countdownType + "\n"
+                + ".super Ljava/lang/Object;\n"
+                + ".source \"mpCountdown.java\"\n"
+                + ".implements Ljava/lang/Runnable;\n\n"
+                + ".field private d:Landroid/app/AlertDialog;\n"
+                + ".field private t:Landroid/widget/TextView;\n"
+                + ".field private h:Landroid/os/Handler;\n"
+                + ".field private n:I\n\n"
+                + ".method public constructor <init>(Landroid/app/AlertDialog;Landroid/widget/TextView;Landroid/os/Handler;I)V\n"
+                + "    .locals 0\n"
+                + "    invoke-direct {p0}, Ljava/lang/Object;-><init>()V\n"
+                + "    iput-object p1, p0, " + countdownType + "->d:Landroid/app/AlertDialog;\n"
+                + "    iput-object p2, p0, " + countdownType + "->t:Landroid/widget/TextView;\n"
+                + "    iput-object p3, p0, " + countdownType + "->h:Landroid/os/Handler;\n"
+                + "    iput p4, p0, " + countdownType + "->n:I\n"
+                + "    return-void\n"
+                + ".end method\n\n"
+                + ".method public run()V\n"
+                + "    .locals 4\n"
+                + "    iget-object v0, p0, " + countdownType + "->d:Landroid/app/AlertDialog;\n"
+                + "    if-eqz v0, :mp_cd_end\n"
+                + "    invoke-virtual {v0}, Landroid/app/AlertDialog;->isShowing()Z\n"
+                + "    move-result v1\n"
+                + "    if-eqz v1, :mp_cd_end\n"
+                + "    iget v1, p0, " + countdownType + "->n:I\n"
+                + "    if-gtz v1, :mp_cd_step\n"
+                + "    :mp_cd_try_s\n"
+                + "    invoke-virtual {v0}, Landroid/app/AlertDialog;->dismiss()V\n"
+                + "    :mp_cd_try_e\n"
+                + "    return-void\n"
+                + "    :mp_cd_try_c\n"
+                + "    move-exception v0\n"
+                + "    return-void\n"
+                + "    .catch Ljava/lang/Throwable; {:mp_cd_try_s .. :mp_cd_try_e} :mp_cd_try_c\n"
+                + "    :mp_cd_step\n"
+                + "    add-int/lit8 v1, v1, -0x1\n"
+                + "    iput v1, p0, " + countdownType + "->n:I\n"
+                + "    iget-object v2, p0, " + countdownType + "->t:Landroid/widget/TextView;\n"
+                + "    invoke-static {v1}, Ljava/lang/String;->valueOf(I)Ljava/lang/String;\n"
+                + "    move-result-object v3\n"
+                + "    invoke-virtual {v2, v3}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V\n"
+                + "    iget-object v0, p0, " + countdownType + "->h:Landroid/os/Handler;\n"
+                + "    if-gtz v1, :mp_cd_sec\n"
+                + "    const-wide v1, 0x12cL\n"
+                + "    goto :mp_cd_post\n"
+                + "    :mp_cd_sec\n"
+                + "    const-wide v1, 0x3e8L\n"
+                + "    :mp_cd_post\n"
+                + "    invoke-virtual {v0, p0, v1, v2}, Landroid/os/Handler;->postDelayed(Ljava/lang/Runnable;J)Z\n"
+                + "    move-result v0\n"
+                + "    :mp_cd_end\n"
+                + "    return-void\n"
+                + ".end method\n";
+    }
+
     static String dragListenerSmali(String dragType) {
         return ".class public " + dragType + "\n" +
                 ".super Ljava/lang/Object;\n" +
@@ -1813,7 +1976,13 @@ public class OverlayInjectorUtil {
                             videoViewSmali(classDescriptor.substring(0, classDescriptor.length() - 1) + "$mpVideo;"),
                             logger, patchedFiles);
                 }
-                insert.append(dialogHelperSmali(classDescriptor, dialog, urlListener, urlViewListener, noshowListener, blinkListener, dismissListener, fontAssets, waveRgb, dragListener, videoHelper)).append("\n");
+                String countdownHelper = null;
+                if (dialog.countdown && !dialog.advanced && dialog.countdownSeconds > 0) {
+                    countdownHelper = emitHelperSmali(context, smaliFile, classDescriptor, "$mpCountdown",
+                            countdownSmali(classDescriptor.substring(0, classDescriptor.length() - 1) + "$mpCountdown;"),
+                            logger, patchedFiles);
+                }
+                insert.append(dialogHelperSmali(classDescriptor, dialog, urlListener, urlViewListener, noshowListener, blinkListener, dismissListener, fontAssets, waveRgb, dragListener, videoHelper, countdownHelper)).append("\n");
             }
             insert.append(wrapperSmali(classDescriptor, flags.isEmpty() ? "protected" : flags,
                     toast != null, dialog != null));

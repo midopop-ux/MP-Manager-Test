@@ -280,6 +280,11 @@ public class ApkOverlayTools {
         MaterialSwitch cancelSwitch;
         MaterialAutoCompleteTextView showModeTv;
         MaterialSwitch movableSwitch;
+        MaterialSwitch countdownSwitch;
+        View countdownBox;
+        TextInputEditText countdownSecInput;
+        View previewCountdownRow;
+        TextView previewCountdownText;
         MaterialAutoCompleteTextView mediaTv;
         LinearLayout mediaBox;
         MaterialButton pickMediaBtn;
@@ -360,6 +365,11 @@ public class ApkOverlayTools {
         f.cancelSwitch = view.findViewById(R.id.overlayDlgCancelable);
         f.showModeTv = view.findViewById(R.id.overlayDlgShowModeTv);
         f.movableSwitch = view.findViewById(R.id.overlayDlgMovable);
+        f.countdownSwitch = view.findViewById(R.id.overlayDlgCountdown);
+        f.countdownBox = view.findViewById(R.id.overlayDlgCountdownBox);
+        f.countdownSecInput = view.findViewById(R.id.overlayDlgCountdownSec);
+        f.previewCountdownRow = view.findViewById(R.id.overlayDlgPreviewCountdownRow);
+        f.previewCountdownText = view.findViewById(R.id.overlayDlgPreviewCountdownText);
         f.mediaTv = view.findViewById(R.id.overlayDlgMediaTv);
         f.mediaBox = view.findViewById(R.id.overlayDlgMediaBox);
         f.pickMediaBtn = view.findViewById(R.id.overlayDlgPickMediaBtn);
@@ -446,6 +456,8 @@ public class ApkOverlayTools {
         dlg.neutralUrl = f.neuBox.getVisibility() == View.VISIBLE ? actionUrl(f.neuAction, f.neuUrl, badUrl) : null;
         if (badUrl[0]) return null;
         dlg.cancelable = f.cancelSwitch.isChecked();
+        dlg.countdown = f.countdownSwitch != null && f.countdownSwitch.isChecked();
+        dlg.countdownSeconds = Math.max(1, Math.min(300, parseIntSafe(textOf(f.countdownSecInput), 3)));
         applyBehaviorToOptions(f, dlg);
         String mediaMode = textOf(f.mediaTv);
         String videoLabel = context.rss.getString(R.string.media_video);
@@ -476,7 +488,7 @@ public class ApkOverlayTools {
             Extensions.showMessage(context, "Enter a title or message");
             return null;
         }
-        if (dlg.positive.isEmpty() && dlg.negative.isEmpty() && dlg.neutral.isEmpty()) {
+        if (!dlg.countdown && dlg.positive.isEmpty() && dlg.negative.isEmpty() && dlg.neutral.isEmpty()) {
             dlg.positive = "OK";
         }
         return dlg;
@@ -580,6 +592,9 @@ public class ApkOverlayTools {
         setupButtonBox(f.posBox, R.id.overlayPosAddBtn, f.posInput, o.positive, f.posAction, f.posUrl, o.positiveUrl);
         setupButtonBox(f.negBox, R.id.overlayNegAddBtn, f.negInput, o.negative, f.negAction, f.negUrl, o.negativeUrl);
         setupButtonBox(f.neuBox, R.id.overlayNeuAddBtn, f.neuInput, o.neutral, f.neuAction, f.neuUrl, o.neutralUrl);
+        if (f.countdownSwitch != null) f.countdownSwitch.setChecked(o.countdown);
+        if (f.countdownBox != null) f.countdownBox.setVisibility(o.countdown ? View.VISIBLE : View.GONE);
+        setText(f.countdownSecInput, String.valueOf(o.countdownSeconds > 0 ? o.countdownSeconds : 3));
         f.cancelSwitch.setChecked(o.cancelable);
         String modeLabel = o.showOnce ? context.rss.getString(R.string.show_once)
                 : o.dontShowAgain ? context.rss.getString(R.string.don_t_show_again_button)
@@ -2092,6 +2107,20 @@ public class ApkOverlayTools {
                     }
                     updateStylePreview(form);
                     updatePreviewImage(form);
+                    if (form.countdownSwitch.isChecked()) {
+                        int sec = 3;
+                        try {
+                            String secStr = form.countdownSecInput.getText() == null ? "" : form.countdownSecInput.getText().toString().trim();
+                            if (!secStr.isEmpty()) {
+                                sec = Math.max(1, Math.min(60, Integer.parseInt(secStr)));
+                            }
+                        } catch (Exception ignored) {
+                        }
+                        form.previewCountdownRow.setVisibility(View.VISIBLE);
+                        form.previewCountdownText.setText(sec + "s");
+                    } else {
+                        form.previewCountdownRow.setVisibility(View.GONE);
+                    }
                 }
             } catch (Exception ignored) {
             }
@@ -2111,6 +2140,14 @@ public class ApkOverlayTools {
         dlgTitleInput.addTextChangedListener(previewWatcher);
         dlgMsgInput.addTextChangedListener(previewWatcher);
         toastHtmlSwitch.setOnCheckedChangeListener((b, c) -> updatePreview.run());
+        form.countdownSecInput.addTextChangedListener(previewWatcher);
+        form.countdownSwitch.setOnCheckedChangeListener((b, c) -> {
+            form.countdownBox.setVisibility(c ? View.VISIBLE : View.GONE);
+            if (c && cancelSwitch.isChecked()) {
+                cancelSwitch.setChecked(false);
+            }
+            updatePreview.run();
+        });
         dlgHtmlSwitch.setOnCheckedChangeListener((b, c) -> {
             updatePreview.run();
             renderAdv[0].run();

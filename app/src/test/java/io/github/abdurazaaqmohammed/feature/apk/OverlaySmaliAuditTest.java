@@ -391,6 +391,57 @@ public class OverlaySmaliAuditTest {
         assertTrue(smali, smali.contains(DISMISS));
     }
 
+    @Test
+    public void countdownSplashDialogPlainAndStyled() {
+        String cdType = "Lcom/abdurazaagmohammed/AntiSplit/main/MainActivity$mpCountdown;";
+        String cdSmali = OverlayInjectorUtil.countdownSmali(cdType);
+        auditMethod(cdSmali, "countdownRunnable");
+        assertTrue(cdSmali, cdSmali.contains("isShowing()Z"));
+        assertTrue(cdSmali, cdSmali.contains("dismiss()V"));
+        assertTrue(cdSmali, cdSmali.contains("postDelayed(Ljava/lang/Runnable;J)Z"));
+
+        OverlayInjectorUtil.DialogOptions plain = new OverlayInjectorUtil.DialogOptions();
+        plain.title = "Welcome";
+        plain.message = "App ready";
+        plain.positive = "";
+        plain.negative = "";
+        plain.neutral = "";
+        plain.cancelable = false;
+        plain.countdown = true;
+        plain.countdownSeconds = 3;
+        String plainSmali = OverlayInjectorUtil.dialogHelperSmali(
+                CLS, plain, null, null, null, null, null, new HashMap<>(), null, null, null, cdType);
+        auditMethod(plainSmali, "countdownDialogPlain");
+        assertTrue(plainSmali, plainSmali.contains("Landroid/widget/ProgressBar;"));
+        assertTrue(plainSmali, plainSmali.contains(cdType));
+        assertTrue(plainSmali, plainSmali.contains("\"3\""));
+        assertFalse(plainSmali, plainSmali.contains("setPositiveButton"));
+
+        OverlayInjectorUtil.DialogOptions styled = new OverlayInjectorUtil.DialogOptions();
+        styled.title = "Welcome";
+        styled.message = "Starting";
+        styled.positive = "";
+        styled.cancelable = false;
+        styled.countdown = true;
+        styled.countdownSeconds = 5;
+        styled.msgColor = 0xFF00FFAA;
+        styled.imageBase64 = "aGk=";
+        styled.bgEnabled = true;
+        styled.bgColor1 = 0xFF101010;
+        styled.cornerRadiusDp = 16f;
+        styled.animBorder = true;
+        styled.rainbowAnim = true;
+        styled.dlgFont = "serif";
+        styled.draggable = true;
+        String styledSmali = OverlayInjectorUtil.dialogHelperSmali(
+                CLS, styled, null, null, null, null, null, new HashMap<>(), RGB, DRAG, null, cdType);
+        auditMethod(styledSmali, "countdownDialogStyled");
+        assertTrue(styledSmali, styledSmali.contains(cdType));
+        assertTrue(styledSmali, styledSmali.contains(RGB));
+        assertTrue(styledSmali, styledSmali.contains(DRAG));
+        assertTrue(styledSmali, styledSmali.contains("\"5\""));
+    }
+
     // ---------- audit engine ----------
 
     private static final Pattern METHOD_LINE =
