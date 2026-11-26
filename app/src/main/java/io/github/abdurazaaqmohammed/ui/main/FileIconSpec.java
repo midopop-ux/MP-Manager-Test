@@ -87,21 +87,83 @@ public record FileIconSpec(int glyph, int background, int foreground, int label)
         if (extension.equals(".arsc")) return ARSC;
         FileIconSpec codeSpec = codeSpecForExt(extension);
         if (codeSpec != null) return codeSpec;
-        if (FileIconLoader.isDatabaseExt(extension)) return DATABASE;
-        if (FileIconLoader.isFontExt(extension)) return FONT;
-        if (FileIconLoader.isBinaryExt(extension)) return BINARY;
-        if (FileIconLoader.isProtoExt(extension)) return PROTO;
-        if (FileIconLoader.isWordExt(extension)) return DOCUMENT;
-        if (FileIconLoader.isSheetExt(extension)) return SHEET;
-        if (FileIconLoader.isSlideExt(extension)) return SLIDE;
-        if (FileIconLoader.isScriptExt(extension)) return SCRIPT;
-        if (FileIconLoader.isBackupExt(extension)) return BACKUP;
-        if (FileIconLoader.isCertExt(extension)) return CERTIFICATE;
+        if (isDatabaseExt(extension)) return DATABASE;
+        if (isFontExt(extension)) return FONT;
+        if (isBinaryExt(extension)) return BINARY;
+        if (isProtoExt(extension)) return PROTO;
+        if (isWordExt(extension)) return DOCUMENT;
+        if (isSheetExt(extension)) return SHEET;
+        if (isSlideExt(extension)) return SLIDE;
+        if (isScriptExt(extension)) return SCRIPT;
+        if (isBackupExt(extension)) return BACKUP;
+        if (isCertExt(extension)) return CERTIFICATE;
         if (FileUtils.matchExt(extension, FileUtils.TEXT_EXTS)) return TEXT;
         if (List.of(".img", ".iso", ".vdi", ".vhd", ".vhdx", ".vmdk", ".qcow2", ".ext4", ".wad", ".payload").contains(extension)
                 || "payload.bin".equalsIgnoreCase(FilenameUtils.getName(path))) return DISK;
         if (FileUtils.isElf(path)) return ELF;
         return theme == R.style.Theme_MyApp_Light ? spec(FILE.glyph, 0xFF616161, R.string.file) : FILE;
+    }
+
+    static boolean isDatabaseExt(String ext) {
+        return ".db".equals(ext) || ".sqlite".equals(ext) || ".sqlite3".equals(ext)
+                || ".db-wal".equals(ext) || ".db-shm".equals(ext) || ".db-journal".equals(ext)
+                || ".workdb".equals(ext) || ".workdb-wal".equals(ext) || ".workdb-shm".equals(ext)
+                || ".ldb".equals(ext) || ".dbf".equals(ext) || ".mdb".equals(ext) || ".accdb".equals(ext)
+                || ".rdb".equals(ext) || ".realm".equals(ext) || ".kdbx".equals(ext)
+                || ".wallet".equals(ext) || ".keychain".equals(ext);
+    }
+
+    static boolean isFontExt(String ext) {
+        return ".ttf".equals(ext) || ".otf".equals(ext) || ".woff".equals(ext) || ".woff2".equals(ext) || ".ttc".equals(ext);
+    }
+
+    static boolean isBinaryExt(String ext) {
+        return ".so".equals(ext) || ".bin".equals(ext) || ".dat".equals(ext) || ".vdex".equals(ext)
+                || ".odex".equals(ext) || ".art".equals(ext) || ".o".equals(ext) || ".dylib".equals(ext) || ".dll".equals(ext)
+                || ".binproto".equals(ext) || ".binwalk".equals(ext) || ".bios".equals(ext) || ".rom".equals(ext)
+                || ".dtbo".equals(ext) || ".vbmeta".equals(ext) || ".sparse".equals(ext) || ".chd".equals(ext)
+                || ".cso".equals(ext) || ".pbp".equals(ext) || ".gb".equals(ext) || ".gba".equals(ext)
+                || ".gbc".equals(ext) || ".nds".equals(ext) || ".nes".equals(ext) || ".n64".equals(ext)
+                || ".z64".equals(ext) || ".sfc".equals(ext) || ".smc".equals(ext) || ".oat".equals(ext)
+                || ".pyc".equals(ext) || ".wasm".equals(ext) || ".tflite".equals(ext) || ".onnx".equals(ext)
+                || ".h5".equals(ext) || ".mat".equals(ext) || ".msgpack".equals(ext) || ".pcap".equals(ext)
+                || ".pcapng".equals(ext) || ".cap".equals(ext) || ".snoop".equals(ext) || ".trace".equals(ext)
+                || ".hprof".equals(ext) || ".shm".equals(ext) || ".wal".equals(ext) || ".seed".equals(ext)
+                || ".xpo".equals(ext) || ".crypt14".equals(ext) || ".crypt15".equals(ext);
+    }
+
+    static boolean isProtoExt(String ext) {
+        return ".pb".equals(ext) || ".proto".equals(ext) || ".preferences_pb".equals(ext) || ".pma".equals(ext) || ".bson".equals(ext)
+                || ".parquet".equals(ext) || ".arrow".equals(ext) || ".avro".equals(ext);
+    }
+
+    static boolean isWordExt(String ext) {
+        return ".doc".equals(ext) || ".docx".equals(ext) || ".odt".equals(ext) || ".rtf".equals(ext);
+    }
+
+    static boolean isSheetExt(String ext) {
+        return ".xls".equals(ext) || ".xlsx".equals(ext) || ".csv".equals(ext) || ".ods".equals(ext) || ".tsv".equals(ext);
+    }
+
+    static boolean isSlideExt(String ext) {
+        return ".ppt".equals(ext) || ".pptx".equals(ext) || ".odp".equals(ext);
+    }
+
+    static boolean isScriptExt(String ext) {
+        return ".sh".equals(ext) || ".bash".equals(ext) || ".py".equals(ext) || ".c".equals(ext)
+                || ".cpp".equals(ext) || ".h".equals(ext) || ".hpp".equals(ext) || ".cs".equals(ext)
+                || ".rs".equals(ext) || ".go".equals(ext) || ".lua".equals(ext);
+    }
+
+    static boolean isBackupExt(String ext) {
+        return ".bak".equals(ext) || ".backup".equals(ext) || ".old".equals(ext) || ".orig".equals(ext) || ".save".equals(ext);
+    }
+
+    static boolean isCertExt(String ext) {
+        return ".pem".equals(ext) || ".crt".equals(ext) || ".cer".equals(ext) || ".key".equals(ext)
+                || ".keystore".equals(ext) || ".jks".equals(ext) || ".bks".equals(ext) || ".der".equals(ext) || ".p12".equals(ext) || ".pfx".equals(ext)
+                || ".asc".equals(ext) || ".gpg".equals(ext) || ".csr".equals(ext) || ".crl".equals(ext)
+                || ".sig".equals(ext) || ".idsig".equals(ext) || ".pub".equals(ext) || ".p8".equals(ext) || ".pk8".equals(ext);
     }
 
     public Drawable drawable(Context context) {
