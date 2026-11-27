@@ -208,6 +208,80 @@ public class OverlaySmaliAuditTest {
     }
 
     @Test
+    public void advancedDialogRendersEditableTitleMessageChrome() {
+        OverlayInjectorUtil.DialogOptions o = new OverlayInjectorUtil.DialogOptions();
+        o.advanced = true;
+        o.widgets = new ArrayList<>();
+        OverlayInjectorUtil.AdvWidget title = new OverlayInjectorUtil.AdvWidget();
+        title.id = "@title";
+        title.kind = "title";
+        title.text = "MP Manager";
+        title.textSizeSp = 20f;
+        title.fontStyle = 1;
+        title.leftDp = 4;
+        title.topDp = 4;
+        title.widthPercent = 100;
+        o.widgets.add(title);
+        OverlayInjectorUtil.AdvWidget message = new OverlayInjectorUtil.AdvWidget();
+        message.id = "@message";
+        message.kind = "message";
+        message.text = "Welcome to MP Manager";
+        message.textSizeSp = 15f;
+        message.leftDp = 4;
+        message.topDp = 40;
+        message.widthPercent = 100;
+        o.widgets.add(message);
+        OverlayInjectorUtil.AdvWidget button = new OverlayInjectorUtil.AdvWidget();
+        button.kind = "button";
+        button.text = "موافق";
+        button.leftDp = 8;
+        button.topDp = 98;
+        button.widthDp = 120;
+        button.heightDp = 44;
+        o.widgets.add(button);
+        String smali = OverlayInjectorUtil.dialogHelperSmali(
+                CLS, o, null, null, null, null, DISMISS, new HashMap<>(), null);
+        auditMethod(smali, "advancedDialogRendersEditableTitleMessageChrome");
+        assertTrue(smali, smali.contains("Landroid/widget/TextView;"));
+        assertTrue(smali, smali.contains("MP Manager"));
+        assertTrue(smali, smali.contains("Welcome to MP Manager"));
+        assertTrue(smali, smali.contains("Landroid/widget/Button;"));
+        assertFalse(smali, smali.contains(".catch"));
+    }
+
+    @Test
+    public void advancedProgressAndCardRenderRealViews() {
+        OverlayInjectorUtil.DialogOptions o = new OverlayInjectorUtil.DialogOptions();
+        o.advanced = true;
+        o.widgets = new ArrayList<>();
+        OverlayInjectorUtil.AdvWidget progress = new OverlayInjectorUtil.AdvWidget();
+        progress.kind = "progress";
+        progress.leftDp = 8;
+        progress.topDp = 8;
+        progress.widthDp = 180;
+        o.widgets.add(progress);
+        OverlayInjectorUtil.AdvWidget card = new OverlayInjectorUtil.AdvWidget();
+        card.kind = "card";
+        card.text = "Card body";
+        card.textSizeSp = 14f;
+        card.leftDp = 8;
+        card.topDp = 40;
+        card.widthDp = 220;
+        card.heightDp = 64;
+        o.widgets.add(card);
+        String smali = OverlayInjectorUtil.dialogHelperSmali(
+                CLS, o, null, null, null, null, DISMISS, new HashMap<>(), null);
+        auditMethod(smali, "advancedProgressAndCardRenderRealViews");
+        assertTrue(smali, smali.contains("Landroid/widget/ProgressBar;"));
+        assertTrue(smali, smali.contains("->setProgress(I)V"));
+        assertTrue(smali, smali.contains("Landroid/graphics/drawable/GradientDrawable;"));
+        assertTrue(smali, smali.contains("->setCornerRadius(F)V"));
+        assertTrue(smali, smali.contains("->setPadding(IIII)V"));
+        assertTrue(smali, smali.contains("Card body"));
+        assertFalse(smali, smali.contains(".catch"));
+    }
+
+    @Test
     public void waveRgbBorder() {
         OverlayInjectorUtil.DialogOptions o = new OverlayInjectorUtil.DialogOptions();
         o.title = "T";

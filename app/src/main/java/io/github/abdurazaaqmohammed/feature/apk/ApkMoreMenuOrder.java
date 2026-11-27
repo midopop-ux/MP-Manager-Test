@@ -26,6 +26,7 @@ public final class ApkMoreMenuOrder {
     public static final String CLONE = "clone";
     public static final String ADD_TOAST = "add_toast";
     public static final String REMOVE_TOASTS = "remove_toasts";
+    public static final String REMOVE_INJECTION = "remove_injection";
     public static final String REMOVE_SIG = "remove_sig";
     public static final String SIG_HEALTH = "sig_health";
     public static final String QUICK_EDIT = "quick_edit";
@@ -42,7 +43,7 @@ public final class ApkMoreMenuOrder {
 
     public static final String[] DEFAULT_ORDER = {
             SIGN, OPT, AAPT2_OPT, DECOMPILE, JADX_JAVA, REFACTOR, PROTECT, CLONE,
-            ADD_TOAST, REMOVE_TOASTS, REMOVE_SIG, SIG_HEALTH,
+            ADD_TOAST, REMOVE_TOASTS, REMOVE_INJECTION, REMOVE_SIG, SIG_HEALTH,
             QUICK_EDIT, MANIFEST_TOGGLES, PERMISSIONS, XPOSED_PATCH, MULTIPLEX,
             IL2CPP, PATCH_LIBS, FLUTTER, FRIDA, JIAGU, PRIVACY
     };
@@ -127,6 +128,7 @@ public final class ApkMoreMenuOrder {
             case CLONE: return context.getString(R.string.clone_apk);
             case ADD_TOAST: return context.getString(R.string.add_toast_dialog);
             case REMOVE_TOASTS: return context.getString(R.string.remove_all_toasts);
+            case REMOVE_INJECTION: return context.getString(R.string.remove_injection);
             case REMOVE_SIG: return context.getString(R.string.remove_signature);
             case SIG_HEALTH: return context.getString(R.string.signature_health);
             case QUICK_EDIT: return context.getString(R.string.quick_edit);
@@ -169,6 +171,7 @@ public final class ApkMoreMenuOrder {
             case CLONE: return R.drawable.control_point_duplicate_24px;
             case ADD_TOAST: return R.drawable.add_24px;
             case REMOVE_TOASTS: return R.drawable.baseline_remove_circle_24;
+            case REMOVE_INJECTION: return R.drawable.ic_shield_24;
             case REMOVE_SIG: return R.drawable.lock_open_24px;
             case SIG_HEALTH: return R.drawable.baseline_info_24;
             case QUICK_EDIT: return R.drawable.edit_24px;

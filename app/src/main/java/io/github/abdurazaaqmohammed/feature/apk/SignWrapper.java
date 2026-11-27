@@ -523,12 +523,17 @@ public class SignWrapper {
     }
 
     private void finishInPlaceSign(File inputApk, File output) throws IOException {
-        if (!inputApk.delete()) {
-            throw new IOException("Failed to delete original file " + inputApk.getPath());
+        File backup = new File(inputApk.getParentFile(),
+                inputApk.getName() + ".signed_backup." + System.nanoTime());
+        if (!inputApk.renameTo(backup)) {
+            throw new IOException("Failed to protect original file " + inputApk.getPath());
         }
-        if (!output.renameTo(inputApk)) {
-            throw new IOException("Failed to move signed file to " + inputApk.getPath());
+        if (output.renameTo(inputApk)) {
+            backup.delete();
+            return;
         }
+        backup.renameTo(inputApk);
+        throw new IOException("Failed to move signed file to " + inputApk.getPath());
     }
 
     private static boolean isPemEncoded(byte[] bytes) {

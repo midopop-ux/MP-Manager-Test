@@ -126,6 +126,30 @@
             android:label="@string/sidebar_tools">
         </activity>
         <activity
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar"
+            android:name="io.github.abdurazaaqmohammed.feature.ai.AiChatActivity"
+            android:exported="false"
+            android:label="@string/ai_chat_title">
+        </activity>
+        <activity
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar"
+            android:name="io.github.abdurazaaqmohammed.feature.apk.ApkCloneActivity"
+            android:exported="false"
+            android:label="@string/apk_clone_title">
+        </activity>
+        <activity
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar"
+            android:name="io.github.abdurazaaqmohammed.feature.crypto.FileCryptoActivity"
+            android:exported="false"
+            android:label="@string/file_crypto_title">
+        </activity>
+        <activity
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar"
+            android:name="io.github.abdurazaaqmohammed.feature.dex.DexBrowserActivity"
+            android:exported="false"
+            android:label="مستكشف DEX">
+        </activity>
+        <activity
             android:name="io.github.abdurazaaqmohammed.feature.system.ToolShortcutActivity"
             android:exported="true"
             android:excludeFromRecents="true"

@@ -108,6 +108,13 @@ public class ToolsHubActivity extends BaseActivity {
             ThemeDialogs.showThemeChooser(ToolsHubActivity.this);
             return true;
         });
+        View aiCard = findViewById(R.id.tools_ai_card);
+        View aiOpen = findViewById(R.id.tools_ai_open);
+        View cloneOpen = findViewById(R.id.tools_clone_open);
+        if (aiOpen != null) aiOpen.setOnClickListener(v ->
+                startActivity(new Intent(this, io.github.abdurazaaqmohammed.feature.ai.AiChatActivity.class)));
+        if (cloneOpen != null) cloneOpen.setOnClickListener(v ->
+                startActivity(new Intent(this, io.github.abdurazaaqmohammed.feature.apk.ApkCloneActivity.class)));
         searchInput = findViewById(R.id.tools_search);
         emptyState = findViewById(R.id.tools_empty);
         grid = findViewById(R.id.tools_grid);

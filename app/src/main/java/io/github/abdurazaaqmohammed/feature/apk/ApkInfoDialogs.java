@@ -897,38 +897,146 @@ public class ApkInfoDialogs {
                     }).create());
         } else if (ApkMoreMenuOrder.CLONE.equals(actionId)) {
             View ll = LayoutInflater.from(context).inflate(R.layout.dialog_clone, null);
-            TextView pkgNameView = ll.findViewById(R.id.package_name_input);
+            android.widget.EditText pkgNameView = ll.findViewById(R.id.package_name_input);
+            TextView labelView = ll.findViewById(R.id.clone_label_input);
+            TextView iconStatus = ll.findViewById(R.id.clone_icon_status);
+            TextView packageError = ll.findViewById(R.id.clone_package_error);
+            android.widget.EditText outputDirView = ll.findViewById(R.id.clone_output_dir);
+            com.google.android.material.button.MaterialButton iconButton = ll.findViewById(R.id.clone_icon_button);
+            TextView reportView = ll.findViewById(R.id.clone_report);
+            final byte[][] iconBytes = new byte[1][];
+            if (iconButton != null) {
+                iconButton.setOnClickListener(v -> {
+                    MainActivity.overlayImageCallback = uri -> {
+                        try (InputStream in = context.getContentResolver().openInputStream(uri);
+                             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                            if (in == null) throw new java.io.IOException("تعذر فتح الصورة");
+                            byte[] buf = new byte[8192];
+                            int n;
+                            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                            iconBytes[0] = out.toByteArray();
+                            if (iconStatus != null) iconStatus.setText("تم اختيار أيقونة (" + iconBytes[0].length + " بايت)");
+                        } catch (Exception e) {
+                            if (iconStatus != null) iconStatus.setText("تعذر قراءة الأيقونة: " + e.getMessage());
+                        }
+                    };
+                    context.startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                            .addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"), 9021);
+                });
+            }
+            CheckBox backup = ll.findViewById(R.id.clone_backup);
             String pkgNameFromApk = overlay.getPackageNameFromApk(filePath);
             pkgNameView.setText(ApkCloner.changeEndCharacter(pkgNameFromApk));
+            outputDirView.setText(file.getParent() == null ? "" : file.getParent());
+            pkgNameView.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    String value = s == null ? "" : s.toString().trim();
+                    boolean valid = ApkCloneEngine.isValidPackageName(value);
+                    if (packageError != null) packageError.setText(valid ? "" : "استخدم معرفًا صالحًا مثل com.example.clone");
+                }
+                @Override public void afterTextChanged(android.text.Editable s) { }
+            });
             final boolean[] sign = new boolean[1];
             SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
             CheckBox autosign = ll.findViewById(R.id.autosign);
             autosign.setChecked(sign[0] = settings.getBoolean("autosign", true));
             autosign.setOnCheckedChangeListener((buttonView, isChecked) -> settings.edit().putBoolean("autosign", sign[0] = isChecked).apply());
             ll.findViewById(R.id.sign_settings).setOnClickListener(uiHelper.showSignSettingsDialog());
+            final ApkCloneEngine.Report[] report = new ApkCloneEngine.Report[1];
+            Runnable inspect = () -> AppExecutors.io().execute(() -> {
+                ApkCloneEngine.Report r = ApkCloneEngine.inspect(context, new File(filePath));
+                report[0] = r;
+                context.handler.post(() -> {
+                    reportView.setText(r.summary());
+                    if (pkgNameView.getText().toString().trim().isEmpty()
+                            && !r.packageName.isEmpty()) {
+                        pkgNameView.setText(ApkCloner.changeEndCharacter(r.packageName));
+                    }
+                    if (packageError != null) {
+                        packageError.setText(ApkCloneEngine.isValidPackageName(
+                                pkgNameView.getText().toString().trim()) ? ""
+                                : "استخدم معرفًا صالحًا مثل com.example.clone");
+                    }
+                });
+            });
+            ll.findViewById(R.id.clone_inspect).setOnClickListener(v -> inspect.run());
+            inspect.run();
             dialogUtil.getDialogBuilder().setView(ll)
                     .setNegativeButton(context.rss.getString(android.R.string.cancel), null)
                     .setPositiveButton(context.rss.getString(R.string.clone), (dialog6, which2) -> {
+                        String newPkg = pkgNameView.getText().toString().trim();
+                        if (!ApkCloneEngine.isValidPackageName(newPkg)) {
+                            if (packageError != null) {
+                                packageError.setText("معرّف الحزمة غير صالح؛ استخدم com.example.clone");
+                            }
+                            new ErrorUtil(context).showError(
+                                    new IllegalArgumentException("معرّف الحزمة غير صالح."));
+                            return;
+                        }
                         SignWrapper[] wrapper = new SignWrapper[1];
                         Runnable doClone = () -> {
                             ProgressManager pm = new ProgressManager(context, false).show();
                             APKLogger logger = pm.getLogger();
                             AppExecutors.io().execute(() -> {
-                                ApkCloner apkCloner = new ApkCloner(context, new ApkCloner.ApkClonerCallBack() {
-                                    @Override public void onMessage(String msg) { logger.logMessage(msg); }
-                                    @Override public void onProgress(int progress, int total) { pm.setProgress(progress, total); }
-                                });
-                                String pkgNameInput = pkgNameView.getText().toString();
-                                apkCloner.setPath(filePath, pkgNameFromApk, pkgNameInput);
                                 try {
-                                    apkCloner.processApk();
-                                    File cloned = new File(filePath.replace(".apk", "_clone.apk"));
-                                    if (sign[0]) {
-                                        wrapper[0].signApk(cloned);
-                                    }
+                                    String oldPkg = report[0] != null && !report[0].packageName.isEmpty()
+                                            ? report[0].packageName : pkgNameFromApk;
+                                    String pkgNameInput = pkgNameView.getText().toString().trim();
+                                    ApkCloneEngine.Report result = ApkCloneEngine.clone(context,
+                                            new File(filePath), oldPkg, pkgNameInput,
+                                            backup.isChecked(), sign[0] ? wrapper[0] : null,
+                                            new ApkCloneEngine.Callback() {
+                                                @Override public void onMessage(String msg) { logger.logMessage(msg); }
+                                                @Override public void onProgress(int progress, int total) { pm.setProgress(progress, total); }
+                                            }, labelView == null ? "" : labelView.getText().toString().trim(),
+                                            iconBytes[0], outputDirView == null
+                                                    || outputDirView.getText().toString().trim().isEmpty()
+                                                    ? null : new File(outputDirView.getText().toString().trim()));
+                                    report[0] = result;
+                                    logger.close();
                                     pm.dismiss();
-                                    context.handler.post(context::refreshAllPanes);
-                                } catch (Exception e) { pm.dismiss(); new ErrorUtil(context).showError(e); }
+                                    context.handler.post(() -> {
+                                        reportView.setText(result.summary());
+                                        if (result.cloneable && !result.output.isEmpty()) {
+                                            context.refreshAllPanes();
+                                        }
+                                        MaterialAlertDialogBuilder done =
+                                                dialogUtil.getDialogBuilder()
+                                                        .setTitle(result.cloneable ? "تم الاستنساخ" : "تعذر الاستنساخ")
+                                                        .setMessage(result.summary())
+                                                        .setPositiveButton(android.R.string.ok, null);
+                                        if (result.cloneable && !result.output.isEmpty()) {
+                                            done.setNeutralButton("فتح الناتج", (d, w) -> {
+                                                try {
+                                                    Uri uri = FileProvider.getUriForFile(context,
+                                                            context.getPackageName() + ".provider",
+                                                            new File(result.output));
+                                                    context.startActivity(new Intent(Intent.ACTION_VIEW)
+                                                            .setDataAndType(uri,
+                                                                    "application/vnd.android.package-archive")
+                                                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+                                                } catch (Exception ex) {
+                                                    new ErrorUtil(context).showError(ex);
+                                                }
+                                            });
+                                            done.setNegativeButton("نسخ المسار", (d, w) -> {
+                                                android.content.ClipboardManager cm =
+                                                        (android.content.ClipboardManager) context.getSystemService(
+                                                                android.content.Context.CLIPBOARD_SERVICE);
+                                                cm.setPrimaryClip(android.content.ClipData.newPlainText(
+                                                        "APK", result.output));
+                                                android.widget.Toast.makeText(context,
+                                                        "نُسخ مسار الناتج.", android.widget.Toast.LENGTH_SHORT).show();
+                                            });
+                                        }
+                                        done.show();
+                                    });
+                                } catch (Exception e) {
+                                    logger.close();
+                                    pm.dismiss();
+                                    context.handler.post(() -> new ErrorUtil(context).showError(e));
+                                }
                             });
                         };
                         if (sign[0]) SignWrapper.requireAuth(context, sw -> {
@@ -939,7 +1047,9 @@ public class ApkInfoDialogs {
         } else if (ApkMoreMenuOrder.ADD_TOAST.equals(actionId)) {
             overlay.showAddToastDialog(file, filePath);
         } else if (ApkMoreMenuOrder.REMOVE_TOASTS.equals(actionId)) {
-            overlay.showRemoveAllToastsDialog(file);
+            ToastRemovalDialog.show(context, file, context::refreshAllPanes);
+        } else if (ApkMoreMenuOrder.REMOVE_INJECTION.equals(actionId)) {
+            InjectionRemovalDialog.show(context, file, context::refreshAllPanes);
         } else if (ApkMoreMenuOrder.REMOVE_SIG.equals(actionId)) {
             signatures.removeSignature(file);
         } else if (ApkMoreMenuOrder.SIG_HEALTH.equals(actionId)) {

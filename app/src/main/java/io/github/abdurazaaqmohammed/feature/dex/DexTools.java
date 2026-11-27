@@ -6,6 +6,7 @@ import io.github.abdurazaaqmohammed.feature.apk.DexDebugStripper;
 import io.github.abdurazaaqmohammed.feature.apk.DexMergeUtil;
 import io.github.abdurazaaqmohammed.feature.apk.DexRepairEngine;
 import io.github.abdurazaaqmohammed.feature.apk.DexStringDecryptor;
+import io.github.abdurazaaqmohammed.feature.crypto.FileCryptoActivity;
 import io.github.abdurazaaqmohammed.feature.apk.DexStringUtil;
 import io.github.abdurazaaqmohammed.ui.common.util.DialogUtil;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -170,7 +171,8 @@ public class DexTools {
                 context.rss.getString(R.string.dex_replace_strings),
                 context.rss.getString(R.string.dex_decrypt_strings),
                 "Anti Confuse (remove array-payload junk)",
-                context.rss.getString(R.string.dex_merge)};
+                context.rss.getString(R.string.dex_merge),
+                "تحليل وفك تشفير ملفات APK"};
         dialogUtil.styleAlertDialog(dialogUtil.getDialogBuilder()
                 .setTitle(displayName)
                 .setSingleChoiceItems(options, -1, (dialog, which) -> {
@@ -191,6 +193,11 @@ public class DexTools {
                         showDexAntiConfuseDialog(dexFile, zipFile);
                     } else if (which == 9) {
                         mergeDexOption(dexFile, zipFile);
+                    } else if (which == 10) {
+                        Intent crypto = new Intent(context, FileCryptoActivity.class);
+                        File target = zipFile != null ? zipFile : dexFile;
+                        crypto.putExtra(FileCryptoActivity.EXTRA_PATH, target.getAbsolutePath());
+                        context.startActivity(crypto);
                     } else if (which == 5) {
                         // MT-style standalone translation mode (multidex dialog
                         // first when the dex comes from an archive).

@@ -8,7 +8,10 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import io.github.abdurazaaqmohammed.MPManager.R;
+import io.github.abdurazaaqmohammed.feature.ai.AiChatActivity;
 import io.github.abdurazaaqmohammed.feature.apk.APKExtractorActivity;
+import io.github.abdurazaaqmohammed.feature.apk.ApkCloneActivity;
+import io.github.abdurazaaqmohammed.feature.crypto.FileCryptoActivity;
 import io.github.abdurazaaqmohammed.feature.apk.JiaguDumpDialog;
 import io.github.abdurazaaqmohammed.feature.files.BookmarkShortcuts;
 import io.github.abdurazaaqmohammed.feature.dumper.PartitionDumperDialog;
@@ -78,6 +81,9 @@ public final class ToolLauncher {
             case "app_ops" -> AppOpsActivity.class;
             case "set_edit" -> SetEditActivity.class;
             case "free_style" -> FreeStylePickerActivity.class;
+            case "ai_chat" -> AiChatActivity.class;
+            case "apk_clone" -> ApkCloneActivity.class;
+            case "file_crypto" -> FileCryptoActivity.class;
             case "tools", "partition_dumper", "jiagu_dumper" -> ToolsHubActivity.class;
             case "recycle_bin", "ftp_server", "network_client", "layout", "color_picker" -> MainActivity.class;
             // No standalone DB browser activity exists: open the file browser at

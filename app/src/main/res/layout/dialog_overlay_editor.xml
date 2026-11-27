@@ -878,11 +878,116 @@
                 android:textSize="13sp" />
 
             <FrameLayout
-                android:id="@+id/overlayCanvas"
+                android:id="@+id/overlayPhoneShell"
                 android:layout_width="match_parent"
-                android:layout_height="380dp"
+                android:layout_height="500dp"
                 android:layout_marginTop="4dp"
-                android:background="?attr/colorSurfaceVariant" />
+                android:background="@android:color/transparent">
+
+                <LinearLayout
+                    android:id="@+id/overlayPhoneFrame"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_margin="8dp"
+                    android:background="@drawable/ds_phone_body"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+
+                    <FrameLayout
+                        android:id="@+id/overlayPhoneScreen"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/ds_phone_wallpaper"
+                        android:clipToOutline="true">
+
+                        <LinearLayout
+                            android:id="@+id/overlayPhoneContent"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="vertical"
+                            android:paddingStart="10dp"
+                            android:paddingTop="7dp"
+                            android:paddingEnd="10dp"
+                            android:paddingBottom="6dp">
+
+                            <FrameLayout
+                                android:id="@+id/overlayPhoneStatus"
+                                android:layout_width="match_parent"
+                                android:layout_height="26dp"
+                                android:paddingStart="12dp"
+                                android:paddingEnd="12dp">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="match_parent"
+                                    android:layout_gravity="start|center_vertical"
+                                    android:text="9:41"
+                                    android:textColor="#FFFFFFFF"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="match_parent"
+                                    android:layout_gravity="end|center_vertical"
+                                    android:text="▮▮▮  ◉  100%"
+                                    android:textColor="#FFFFFFFF"
+                                    android:textSize="9sp"
+                                    android:textStyle="bold" />
+                            </FrameLayout>
+
+                            <com.google.android.material.card.MaterialCardView
+                                android:id="@+id/overlayPhoneDialogCard"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="2dp"
+                                android:layout_marginTop="2dp"
+                                android:layout_marginEnd="2dp"
+                                android:minHeight="240dp"
+                                android:clickable="false"
+                                android:focusable="false"
+                                app:cardBackgroundColor="?attr/colorSurface"
+                                app:cardCornerRadius="24dp"
+                                app:cardElevation="10dp"
+                                app:cardUseCompatPadding="false"
+                                app:strokeColor="?attr/colorOutline"
+                                app:strokeWidth="1dp">
+
+                                <FrameLayout
+                                    android:id="@+id/overlayCanvas"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:minHeight="240dp"
+                                    android:padding="14dp"
+                                    android:background="@android:color/transparent"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false" />
+                            </com.google.android.material.card.MaterialCardView>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="0dp"
+                                android:layout_weight="1" />
+
+                            <View
+                                android:id="@+id/overlayPhoneHome"
+                                android:layout_width="112dp"
+                                android:layout_height="4dp"
+                                android:layout_gravity="center_horizontal"
+                                android:layout_marginTop="4dp"
+                                android:background="@drawable/ds_phone_home" />
+                        </LinearLayout>
+
+                        <View
+                            android:id="@+id/overlayPhoneIsland"
+                            android:layout_width="104dp"
+                            android:layout_height="28dp"
+                            android:layout_gravity="top|center_horizontal"
+                            android:layout_marginTop="6dp"
+                            android:background="@drawable/ds_phone_island" />
+                    </FrameLayout>
+                </LinearLayout>
+            </FrameLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -920,6 +1025,35 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="إضافة عنصر إلى الحوار">
+
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/advAddKind"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/advAddComponent"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="إضافة" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
                 android:layout_marginTop="8dp">
 
                 <com.google.android.material.button.MaterialButton
@@ -938,13 +1072,93 @@
                     android:text="@string/to_all" />
             </LinearLayout>
 
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/advSnapSwitch"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:checked="true"
-                android:text="@string/snap_while_dragging" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/advSnapSwitch"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:checked="true"
+                    android:text="@string/snap_while_dragging" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/advUndoBtn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/undo" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/advRedoBtn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/redo" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/advGridSwitch"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="شبكة المحاذاة" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:hint="محاذاة">
+
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/advAlign"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:hint="تنسيق سريع">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/advTheme"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:hint="الطبقات">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/advLayers"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <LinearLayout
                 android:id="@+id/overlayPropsBox"
@@ -953,6 +1167,8 @@
                 android:orientation="vertical"
                 android:layout_marginTop="8dp" />
         </LinearLayout>
+
+        <include layout="@layout/dialog_studio_panel" />
 
         <com.google.android.material.checkbox.MaterialCheckBox
             android:id="@+id/overlayAutosign"

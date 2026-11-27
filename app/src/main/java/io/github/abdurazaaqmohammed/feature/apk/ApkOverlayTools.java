@@ -10,6 +10,7 @@ import io.github.abdurazaaqmohammed.util.misc.ToastInjectorUtil;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
@@ -19,6 +20,10 @@ import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Shader;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.text.Editable;
@@ -36,12 +41,16 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.RatingBar;
 import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import io.github.abdurazaaqmohammed.ui.main.ColorWheelView;
@@ -52,6 +61,7 @@ import androidx.core.text.HtmlCompat;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.checkbox.MaterialCheckBox;
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.materialswitch.MaterialSwitch;
@@ -66,12 +76,16 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import io.github.abdurazaaqmohammed.ui.main.MainActivity;
 import io.github.abdurazaaqmohammed.MPManager.R;
@@ -110,6 +124,8 @@ public class ApkOverlayTools {
     private String overlayVideoPath;
     private OverlayForm activeOverlayForm;
     private Runnable activeAdvRender;
+    private DialogStudioController dialogStudio;
+    private AlertDialog activeOverlayDialog;
     private static OverlayInjectorUtil.AdvWidget styleClipboard;
 
 
@@ -138,8 +154,445 @@ public class ApkOverlayTools {
         dst.btnAnimRainbow = src.btnAnimRainbow;
     }
 
+    private static boolean isBaseChromeWidget(OverlayInjectorUtil.AdvWidget w) {
+        return w != null && ("@title".equals(w.id) || "@message".equals(w.id));
+    }
+
+    private static boolean isInsideView(View child, View parent) {
+        View v = child;
+        while (v != null) {
+            if (v == parent) return true;
+            v = v.getParent() instanceof View ? (View) v.getParent() : null;
+        }
+        return false;
+    }
+
+    private void refreshLayers(MaterialAutoCompleteTextView tv,
+                               List<OverlayInjectorUtil.AdvWidget> widgets,
+                               OverlayInjectorUtil.AdvWidget selected) {
+        if (tv == null) return;
+        List<String> labels = new ArrayList<>();
+        for (int i = 0; i < widgets.size(); i++) {
+            labels.add(layerLabel(widgets.get(i), i));
+        }
+        tv.setAdapter(new ArrayAdapter<>(context,
+                android.R.layout.simple_dropdown_item_1line, labels));
+        int index = selected == null ? -1 : widgets.indexOf(selected);
+        tv.setText(index >= 0 ? labels.get(index) : "", false);
+    }
+
+    private String layerLabel(OverlayInjectorUtil.AdvWidget w, int index) {
+        if (w == null) return (index + 1) + ". عنصر";
+        String kind = w.kind == null ? "text" : w.kind;
+        String name;
+        switch (kind) {
+            case "title": name = "عنوان"; break;
+            case "message": name = "رسالة"; break;
+            case "button": name = "زر"; break;
+            case "input": name = "إدخال"; break;
+            case "checkbox": name = "اختيار"; break;
+            case "toggle": name = "تبديل"; break;
+            case "spinner": name = "قائمة"; break;
+            case "progress": name = "تقدم"; break;
+            case "divider": name = "فاصل"; break;
+            case "card": name = "بطاقة"; break;
+            case "image": name = "صورة"; break;
+            case "icon": name = "أيقونة"; break;
+            default: name = "نص"; break;
+        }
+        String text = w.text == null ? "" : w.text.trim();
+        if (text.length() > 18) text = text.substring(0, 18) + "…";
+        return (index + 1) + ". " + name + (text.isEmpty() ? "" : ": " + text);
+    }
+
+    private void applyDialogTheme(OverlayForm f, int index,
+                                  List<OverlayInjectorUtil.AdvWidget> widgets) {
+        if (f == null) return;
+        int bg1;
+        int bg2;
+        int border;
+        int title;
+        int radius;
+        int borderWidth;
+        boolean bgEnabled = true;
+        int okBg;
+        int okBg2;
+        int okText;
+        int cancelBg;
+        int cancelBg2;
+        int cancelText;
+        switch (index) {
+            case 1:
+                bg1 = 0xF7FFFFFF; bg2 = 0xF7EEF2FF; border = 0x22000000; title = 0xFF1B1B1F;
+                radius = 24; borderWidth = 1;
+                okBg = 0xFF3B6CF6; okBg2 = 0xFF2F5BEA; okText = 0xFFFFFFFF;
+                cancelBg = 0xFFE9EAF2; cancelBg2 = 0xFFE1E3EE; cancelText = 0xFF1B1B1F;
+                break;
+            case 2:
+                bg1 = 0xF21A1A1E; bg2 = 0xF22A2A32; border = 0x33FFFFFF; title = 0xFFFFFFFF;
+                radius = 22; borderWidth = 1;
+                okBg = 0xFF6C8CFF; okBg2 = 0xFF4D6EF5; okText = 0xFFFFFFFF;
+                cancelBg = 0x33FFFFFF; cancelBg2 = 0x22FFFFFF; cancelText = 0xFFFFFFFF;
+                break;
+            case 3:
+                bg1 = 0xF20B1020; bg2 = 0xF21A0B2E; border = 0xFF00E5FF; title = 0xFF00E5FF;
+                radius = 20; borderWidth = 2;
+                okBg = 0xFF00E5FF; okBg2 = 0xFF00B8D4; okText = 0xFF001018;
+                cancelBg = 0x2200E5FF; cancelBg2 = 0x1100E5FF; cancelText = 0xFF00E5FF;
+                break;
+            case 4:
+                bg1 = 0; bg2 = 0; border = 0; title = 0;
+                radius = 0; borderWidth = 0; bgEnabled = false;
+                okBg = 0xFF3B6CF6; okBg2 = 0xFF2F5BEA; okText = 0xFFFFFFFF;
+                cancelBg = 0xFFF1F2F7; cancelBg2 = 0xFFE9EAF2; cancelText = 0xFF1B1B1F;
+                break;
+            default:
+                bg1 = 0xCC0B1220; bg2 = 0xCC1B2A4A; border = 0x66FFFFFF; title = 0xFFFFFFFF;
+                radius = 26; borderWidth = 1;
+                okBg = 0xFF3B6CF6; okBg2 = 0xFF2F5BEA; okText = 0xFFFFFFFF;
+                cancelBg = 0x33FFFFFF; cancelBg2 = 0x22FFFFFF; cancelText = 0xFFFFFFFF;
+                break;
+        }
+        f.bgSwitch.setChecked(bgEnabled);
+        f.bgC1 = bg1;
+        f.bgC2 = bg2;
+        f.bgC2set = bgEnabled && bg2 != 0;
+        f.borderC = border;
+        f.titleC = title;
+        f.radiusDp = radius;
+        f.borderDp = borderWidth;
+        setText(f.radiusInput, String.valueOf(radius));
+        setText(f.borderWidthInput, String.valueOf(borderWidth));
+        if (f.orientTv != null) f.orientTv.setText("Top to bottom", false);
+        if (f.titleColorHex != null) {
+            f.titleColorHex.setText(title == 0 ? "" : String.format("#%08X", title));
+        }
+        if (widgets == null) widgets = new ArrayList<>();
+        for (OverlayInjectorUtil.AdvWidget w : widgets) {
+            if (w == null) continue;
+            if ("title".equals(w.kind) || "message".equals(w.kind)) {
+                w.textColor = title;
+            } else if ("button".equals(w.kind) && w.id != null) {
+                if ("@btn_ok".equals(w.id)) {
+                    w.btnBg = okBg;
+                    w.btnBg2 = okBg2;
+                    w.textColor = okText;
+                    w.btnCornerRadiusDp = radius;
+                } else if ("@btn_cancel".equals(w.id)) {
+                    w.btnBg = cancelBg;
+                    w.btnBg2 = cancelBg2;
+                    w.textColor = cancelText;
+                    w.btnCornerRadiusDp = radius;
+                }
+            }
+        }
+        refreshStyleLabels(f);
+    }
+    private BitmapDrawable buildGridDrawable() {
+        int step = Math.max(4, dp(8));
+        Bitmap bmp = Bitmap.createBitmap(step, step, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bmp);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(0x223B6CF6);
+        paint.setStrokeWidth(1f);
+        canvas.drawLine(0, 0, step, 0, paint);
+        canvas.drawLine(0, 0, 0, step, paint);
+        BitmapDrawable drawable = new BitmapDrawable(context.getResources(), bmp);
+        drawable.setTileModeXY(Shader.TileMode.REPEAT, Shader.TileMode.REPEAT);
+        return drawable;
+    }
+
+    private void ensureChromeWidgets(List<OverlayInjectorUtil.AdvWidget> widgets, OverlayForm form) {
+        boolean wasEmpty = widgets.isEmpty();
+        OverlayInjectorUtil.AdvWidget title = null;
+        OverlayInjectorUtil.AdvWidget message = null;
+        for (OverlayInjectorUtil.AdvWidget w : widgets) {
+            if (w == null) continue;
+            if (title == null && "@title".equals(w.id)) title = w;
+            else if (message == null && "@message".equals(w.id)) message = w;
+        }
+        String titleText = textOf(form == null ? null : form.titleInput);
+        String messageText = textOf(form == null ? null : form.msgInput);
+        String dialogFont = form == null || form.dlgFont == null ? "" : form.dlgFont;
+        String dialogFontPath = form == null || form.dlgFontPath == null ? "" : form.dlgFontPath;
+        if (title == null) {
+            title = new OverlayInjectorUtil.AdvWidget();
+            title.id = "@title";
+            title.kind = "title";
+            title.leftDp = 4;
+            title.topDp = 4;
+            title.widthPercent = 100;
+            title.textSizeSp = 20f;
+            title.fontStyle = 1;
+            title.font = dialogFont;
+            title.fontPath = dialogFontPath;
+            widgets.add(title);
+        }
+        if (message == null) {
+            message = new OverlayInjectorUtil.AdvWidget();
+            message.id = "@message";
+            message.kind = "message";
+            message.leftDp = 4;
+            message.topDp = 40;
+            message.widthPercent = 100;
+            message.textSizeSp = 15f;
+            message.font = dialogFont;
+            message.fontPath = dialogFontPath;
+            widgets.add(message);
+        }
+        if (form != null && form.titleC != 0) title.textColor = form.titleC;
+        title.text = titleText.isEmpty() ? "عنوان الحوار" : titleText;
+        message.text = messageText.isEmpty() ? "نص الرسالة" : messageText;
+        if (title.font == null || title.font.isEmpty()) title.font = dialogFont;
+        if (message.font == null || message.font.isEmpty()) message.font = dialogFont;
+        if (title.fontPath == null || title.fontPath.isEmpty()) title.fontPath = dialogFontPath;
+        if (message.fontPath == null || message.fontPath.isEmpty()) message.fontPath = dialogFontPath;
+        if (!wasEmpty) return;
+        OverlayInjectorUtil.AdvWidget ok = new OverlayInjectorUtil.AdvWidget();
+        ok.id = "@btn_ok";
+        ok.kind = "button";
+        ok.text = "موافق";
+        ok.textSizeSp = 14f;
+        ok.textColor = 0xFFFFFFFF;
+        ok.btnBg = 0xFF3B6CF6;
+        ok.btnBg2 = 0xFF2F5BEA;
+        ok.btnCornerRadiusDp = 22f;
+        ok.btnPaddingDp = 12;
+        ok.btnAction = "Dismiss";
+        ok.leftDp = 8;
+        ok.topDp = 150;
+        ok.widthDp = 120;
+        ok.heightDp = 44;
+        ok.font = dialogFont;
+        ok.fontPath = dialogFontPath;
+        widgets.add(ok);
+        OverlayInjectorUtil.AdvWidget cancel = new OverlayInjectorUtil.AdvWidget();
+        cancel.id = "@btn_cancel";
+        cancel.kind = "button";
+        cancel.text = "حسنًا";
+        cancel.textSizeSp = 14f;
+        cancel.textColor = 0xFF1B1B1F;
+        cancel.btnBg = 0xFFF1F2F7;
+        cancel.btnCornerRadiusDp = 22f;
+        cancel.btnPaddingDp = 12;
+        cancel.btnAction = "Dismiss";
+        cancel.leftDp = 140;
+        cancel.topDp = 150;
+        cancel.widthDp = 120;
+        cancel.heightDp = 44;
+        cancel.font = dialogFont;
+        cancel.fontPath = dialogFontPath;
+        widgets.add(cancel);
+    }
+
     private void renderAdvSafe() {
         if (activeAdvRender != null) activeAdvRender.run();
+    }
+
+    private View previewWidget(OverlayInjectorUtil.AdvWidget w, boolean richText, OverlayForm form) {
+        String kind = w.sourceKind == null || w.sourceKind.isEmpty()
+                ? (w.kind == null ? "text" : w.kind) : w.sourceKind;
+        switch (kind) {
+            case "title":
+            case "message": {
+                TextView tv = new TextView(context);
+                boolean isTitle = "title".equals(kind);
+                tv.setText(displayText(w.text == null ? "" : w.text, richText));
+                tv.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : (isTitle ? 20f : 15f));
+                int themeText = MaterialColors.getColor(context, isTitle
+                        ? com.google.android.material.R.attr.colorOnSurface
+                        : com.google.android.material.R.attr.colorOnSurfaceVariant,
+                        isTitle ? 0xFF1B1B1F : 0xFF44464F);
+                tv.setTextColor(w.textColor != 0 ? w.textColor : themeText);
+                if (isTitle) tv.setTypeface(null,
+                        (w.fontStyle & 1) != 0 ? Typeface.BOLD : Typeface.NORMAL);
+                tv.setLineSpacing(0f, 1.12f);
+                applyWidgetTypeface(tv, w, form);
+                return tv;
+            }
+            case "icon": {
+                TextView icon = new TextView(context);
+                icon.setText(w.text == null || w.text.isEmpty() ? "★" : w.text);
+                icon.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : 28f);
+                icon.setTextColor(w.textColor == 0 ? 0xFF6750A4 : w.textColor);
+                icon.setGravity(Gravity.CENTER);
+                icon.setPadding(dp(6), dp(4), dp(6), dp(4));
+                return icon;
+            }
+            case "image": {
+                ImageView iv = new ImageView(context);
+                iv.setAdjustViewBounds(true);
+                if (w.imageB64 != null && !w.imageB64.isEmpty()) {
+                    try {
+                        byte[] bytes = Base64.decode(w.imageB64, Base64.DEFAULT);
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                        if (bitmap != null) iv.setImageBitmap(bitmap);
+                    } catch (Exception ignored) {
+                    }
+                } else {
+                    iv.setBackgroundColor(0xFF9E9E9E);
+                }
+                return iv;
+            }
+            case "button":
+            case "link": {
+                MaterialButton btn = new MaterialButton(context);
+                String label = DsEmpty(w.text) ? ("link".equals(kind) ? "Open link" : context.rss.getString(R.string.button)) : w.text;
+                btn.setText(displayText(label, richText));
+                btn.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : 14f);
+                if (w.textColor != 0) btn.setTextColor(w.textColor);
+                applyWidgetTypeface(btn, w, form);
+                btn.setBackground(buildButtonDrawable(w));
+                return btn;
+            }
+            case "input":
+            case "textarea":
+            case "number": {
+                EditText input = new EditText(context);
+                input.setText(displayText(w.text == null ? "" : w.text, false));
+                input.setHint(w.hint == null ? "" : w.hint);
+                input.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : 14f);
+                if (w.textColor != 0) input.setTextColor(w.textColor);
+                input.setInputType("number".equals(kind)
+                        ? InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL
+                        : "textarea".equals(kind)
+                        ? InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                        : InputType.TYPE_CLASS_TEXT);
+                input.setFocusable(false);
+                input.setClickable(false);
+                input.setLongClickable(false);
+                input.setCursorVisible(false);
+                input.setPadding(dp(8), dp(6), dp(8), dp(6));
+                applyWidgetTypeface(input, w, form);
+                return input;
+            }
+            case "checkbox": {
+                CheckBox check = new CheckBox(context);
+                check.setText(displayText(w.text == null ? "" : w.text, false));
+                check.setChecked(w.checked);
+                check.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : 14f);
+                if (w.textColor != 0) check.setTextColor(w.textColor);
+                check.setFocusable(false);
+                check.setClickable(false);
+                check.setLongClickable(false);
+                applyWidgetTypeface(check, w, form);
+                return check;
+            }
+            case "toggle": {
+                MaterialSwitch toggle = new MaterialSwitch(context);
+                toggle.setText(displayText(w.text == null ? "" : w.text, false));
+                toggle.setChecked(w.checked);
+                toggle.setFocusable(false);
+                toggle.setClickable(false);
+                toggle.setLongClickable(false);
+                toggle.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : 14f);
+                if (w.textColor != 0) toggle.setTextColor(w.textColor);
+                applyWidgetTypeface(toggle, w, form);
+                return toggle;
+            }
+            case "spinner":
+            case "list":
+            case "radio":
+            case "multiselect": {
+                Spinner spinner = new Spinner(context);
+                List<String> options = w.options == null || w.options.isEmpty()
+                        ? Arrays.asList("Option 1", "Option 2", "Option 3") : w.options;
+                spinner.setAdapter(new ArrayAdapter<>(context,
+                        android.R.layout.simple_spinner_dropdown_item, options));
+                if (w.checked && !options.isEmpty()) spinner.setSelection(0);
+                spinner.setFocusable(false);
+                spinner.setClickable(false);
+                spinner.setLongClickable(false);
+                return spinner;
+            }
+            case "search": {
+                AutoCompleteTextView search = new AutoCompleteTextView(context);
+                search.setHint(w.hint == null ? "Search" : w.hint);
+                List<String> options = w.options == null ? new ArrayList<>() : w.options;
+                search.setAdapter(new ArrayAdapter<>(context,
+                        android.R.layout.simple_dropdown_item_1line, options));
+                search.setFocusable(false);
+                search.setClickable(false);
+                search.setLongClickable(false);
+                search.setCursorVisible(false);
+                return search;
+            }
+            case "rating": {
+                RatingBar rating = new RatingBar(context);
+                rating.setNumStars(5);
+                rating.setStepSize(1);
+                rating.setRating(4);
+                rating.setFocusable(false);
+                rating.setClickable(false);
+                return rating;
+            }
+            case "progress": {
+                ProgressBar progress = new ProgressBar(context);
+                progress.setIndeterminate(false);
+                progress.setMax(100);
+                progress.setProgress(64);
+                return progress;
+            }
+            case "divider": {
+                View line = new View(context);
+                line.setBackgroundColor(0x33000000);
+                line.setMinimumHeight(dp(1));
+                return line;
+            }
+            case "card": {
+                MaterialCardView card = new MaterialCardView(context);
+                card.setCardElevation(dp(2));
+                card.setRadius(dp(18));
+                card.setCardBackgroundColor(0x1F6750A4);
+                card.setStrokeWidth(dp(1));
+                card.setStrokeColor(0x336750A4);
+                TextView content = new TextView(context);
+                content.setText(displayText(w.text == null ? "Card" : w.text, richText));
+                content.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : 14f);
+                if (w.textColor != 0) content.setTextColor(w.textColor);
+                content.setPadding(dp(12), dp(10), dp(12), dp(10));
+                applyWidgetTypeface(content, w, form);
+                card.addView(content);
+                return card;
+            }
+            case "tabs":
+            case "toolbar": {
+                LinearLayout bar = new LinearLayout(context);
+                bar.setOrientation(LinearLayout.HORIZONTAL);
+                bar.setPadding(dp(8), dp(4), dp(8), dp(4));
+                List<String> labels = w.options == null || w.options.isEmpty()
+                        ? Arrays.asList("Tab 1", "Tab 2", "Tab 3") : w.options;
+                for (int i = 0; i < Math.min(3, labels.size()); i++) {
+                    TextView tab = new TextView(context);
+                    tab.setText(labels.get(i));
+                    tab.setTextSize(12);
+                    tab.setPadding(dp(8), dp(4), dp(8), dp(4));
+                    if (i == 0) tab.setTypeface(null, Typeface.BOLD);
+                    bar.addView(tab);
+                }
+                return bar;
+            }
+            case "pager": {
+                TextView pager = new TextView(context);
+                pager.setText("‹   1 / 3   ›");
+                pager.setGravity(Gravity.CENTER);
+                pager.setTextSize(13);
+                pager.setPadding(dp(8), dp(6), dp(8), dp(6));
+                return pager;
+            }
+            default: {
+                TextView tv = new TextView(context);
+                tv.setText(displayText(w.text == null || w.text.isEmpty() ? "Text" : w.text, richText));
+                tv.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : 16f);
+                if (w.textColor != 0) tv.setTextColor(w.textColor);
+                applyWidgetTypeface(tv, w, form);
+                return tv;
+            }
+        }
+    }
+
+    private static boolean DsEmpty(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private interface ImagePicked {
@@ -298,6 +751,7 @@ public class ApkOverlayTools {
         ImageView dlgPreviewImage;
         TextView dlgPreviewVideoTv;
         LinearLayout dlgPreviewBox;
+        MaterialCardView phoneCard;
         MaterialSwitch bgSwitch;
         MaterialSwitch animSwitch;
         MaterialButton bg1Btn;
@@ -378,6 +832,7 @@ public class ApkOverlayTools {
         f.dlgPreviewImage = view.findViewById(R.id.overlayDlgPreviewImage);
         f.dlgPreviewVideoTv = view.findViewById(R.id.overlayDlgPreviewVideoTv);
         f.dlgPreviewBox = view.findViewById(R.id.overlayDlgPreviewBox);
+        f.phoneCard = view.findViewById(R.id.overlayPhoneDialogCard);
         f.bgSwitch = view.findViewById(R.id.overlayBgSwitch);
         f.animSwitch = view.findViewById(R.id.overlayAnimSwitch);
         f.bg1Btn = view.findViewById(R.id.overlayBg1Btn);
@@ -484,7 +939,9 @@ public class ApkOverlayTools {
 
     private OverlayInjectorUtil.DialogOptions collectAdvanced(OverlayForm f,
                                                               List<OverlayInjectorUtil.AdvWidget> widgets) {
-        if (widgets == null || widgets.isEmpty()) {
+        if (widgets == null) widgets = new ArrayList<>();
+        ensureChromeWidgets(widgets, f);
+        if (widgets.isEmpty()) {
             Extensions.showMessage(context, "Add at least one widget");
             return null;
         }
@@ -503,6 +960,21 @@ public class ApkOverlayTools {
         dlg.dlgFont = f.advFont;
         dlg.dlgFontPath = f.advFontPath;
         dlg.cancelable = f.cancelSwitch.isChecked();
+        applyBehaviorToOptions(f, dlg);
+        dlg.html = f.dlgHtml.isChecked();
+        dlg.base64 = f.dlgB64.isChecked();
+        if (dialogStudio != null) {
+            dialogStudio.applyTo(dlg);
+            dlg.widgets.clear();
+            for (OverlayInjectorUtil.AdvWidget w : widgets) {
+                OverlayInjectorUtil.AdvWidget copy = OverlayInjectorUtil.copyWidget(w);
+                if (copy != null) dlg.widgets.add(copy);
+            }
+            if (dlg.widgets.isEmpty()) {
+                Extensions.showMessage(context, "Add at least one widget");
+                return null;
+            }
+        }
         boolean hasButton = false;
         for (OverlayInjectorUtil.AdvWidget w : dlg.widgets) {
             if (w != null && "button".equals(w.kind)) {
@@ -511,9 +983,6 @@ public class ApkOverlayTools {
             }
         }
         if (!hasButton) dlg.cancelable = true;
-        applyBehaviorToOptions(f, dlg);
-        dlg.html = f.dlgHtml.isChecked();
-        dlg.base64 = f.dlgB64.isChecked();
         return dlg;
     }
 
@@ -556,6 +1025,7 @@ public class ApkOverlayTools {
         }
         f.advFont = o.dlgFont == null ? "" : o.dlgFont;
         f.advFontPath = o.dlgFontPath == null ? "" : o.dlgFontPath;
+        if (dialogStudio != null) dialogStudio.loadFrom(o);
         refreshAdvFontLabels(f);
         selected[0] = null;
     }
@@ -1053,6 +1523,19 @@ public class ApkOverlayTools {
             boolean styled = f.bgSwitch.isChecked() || f.borderDp > 0;
             if (!styled) {
                 f.dlgPreviewBox.setBackground(null);
+                if (f.phoneCard != null) {
+                    int base = MaterialColors.getColor(context,
+                            com.google.android.material.R.attr.colorSurface, 0xFFFFFFFF);
+                    int glassA = (base & 0x00FFFFFF) | 0xE8000000;
+                    int glassB = (base & 0x00FFFFFF) | 0xD0000000;
+                    GradientDrawable glass = new GradientDrawable(
+                            GradientDrawable.Orientation.TOP_BOTTOM,
+                            new int[]{glassA, glassB});
+                    glass.setCornerRadius(f.radiusDp * density);
+                    glass.setStroke(Math.max(1, (int) (density + 0.5f)), 0x66FFFFFF);
+                    f.phoneCard.setBackground(glass);
+                    f.phoneCard.setRadius(f.radiusDp * density);
+                }
                 return;
             }
             GradientDrawable gd = new GradientDrawable();
@@ -1074,6 +1557,10 @@ public class ApkOverlayTools {
                 gd.setStroke((int) (f.borderDp * density + 0.5f), f.borderC);
             }
             f.dlgPreviewBox.setBackground(gd);
+            if (f.phoneCard != null) {
+                f.phoneCard.setBackground(gd);
+                f.phoneCard.setRadius(f.radiusDp * density);
+            }
         } catch (Exception ignored) {
         }
     }
@@ -1413,12 +1900,50 @@ public class ApkOverlayTools {
 
         LinearLayout advancedSection = view.findViewById(R.id.overlayAdvancedSection);
         FrameLayout advCanvas = view.findViewById(R.id.overlayCanvas);
+        View phoneFrame = view.findViewById(R.id.overlayPhoneFrame);
+        if (phoneFrame != null) {
+            int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
+            int available = Math.max(dp(220), screenWidth - dp(32));
+            int phoneWidth = Math.min(dp(360), available);
+            ViewGroup.LayoutParams lp = phoneFrame.getLayoutParams();
+            lp.width = phoneWidth;
+            if (lp instanceof FrameLayout.LayoutParams) {
+                ((FrameLayout.LayoutParams) lp).gravity = Gravity.CENTER_HORIZONTAL;
+            }
+            phoneFrame.setLayoutParams(lp);
+        }
         LinearLayout advProps = view.findViewById(R.id.overlayPropsBox);
         final List<OverlayInjectorUtil.AdvWidget> advWidgets = new ArrayList<>();
         final OverlayInjectorUtil.AdvWidget[] advSelected = new OverlayInjectorUtil.AdvWidget[1];
         final float advDensity = context.getResources().getDisplayMetrics().density;
         final Runnable[] renderAdv = new Runnable[1];
         final Runnable[] showAdvProps = new Runnable[1];
+        final int[] advRenderToken = new int[1];
+        final Deque<List<OverlayInjectorUtil.AdvWidget>> advUndo = new ArrayDeque<>();
+        final Deque<List<OverlayInjectorUtil.AdvWidget>> advRedo = new ArrayDeque<>();
+        final Supplier<List<OverlayInjectorUtil.AdvWidget>> advSnapshot = () -> {
+            List<OverlayInjectorUtil.AdvWidget> snapshot = new ArrayList<>();
+            for (OverlayInjectorUtil.AdvWidget widget : advWidgets) {
+                OverlayInjectorUtil.AdvWidget copy = OverlayInjectorUtil.copyWidget(widget);
+                if (copy != null) snapshot.add(copy);
+            }
+            return snapshot;
+        };
+        final Consumer<List<OverlayInjectorUtil.AdvWidget>> advRestore = snapshot -> {
+            advWidgets.clear();
+            for (OverlayInjectorUtil.AdvWidget widget : snapshot) {
+                OverlayInjectorUtil.AdvWidget copy = OverlayInjectorUtil.copyWidget(widget);
+                if (copy != null) advWidgets.add(copy);
+            }
+            advSelected[0] = null;
+            renderAdv[0].run();
+            showAdvProps[0].run();
+        };
+        final Runnable pushAdvHistory = () -> {
+            advUndo.push(advSnapshot.get());
+            while (advUndo.size() > 40) advUndo.removeLast();
+            advRedo.clear();
+        };
         final OverlayForm form = fillForm(view);
 
         showAdvProps[0] = () -> {
@@ -1436,6 +1961,120 @@ public class ApkOverlayTools {
             header.setTypeface(null, Typeface.BOLD);
             header.setTextSize(15);
             advProps.addView(header);
+            LinearLayout xyRow = new LinearLayout(context);
+            xyRow.setOrientation(LinearLayout.HORIZONTAL);
+            EditText xInput = new EditText(context);
+            xInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED);
+            xInput.setText(String.valueOf(w.leftDp));
+            EditText yInput = new EditText(context);
+            yInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED);
+            yInput.setText(String.valueOf(w.topDp));
+            xyRow.addView(UiFields.wrap(context, xInput, "X dp", 0),
+                    new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            xyRow.addView(UiFields.wrap(context, yInput, "Y dp", 0),
+                    new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            advProps.addView(xyRow);
+            xInput.addTextChangedListener(new TextWatcher() {
+                public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+                }
+
+                public void onTextChanged(CharSequence s, int a, int b, int c) {
+                    try {
+                        w.leftDp = Math.max(0, Integer.parseInt(s.toString().trim()));
+                        renderAdv[0].run();
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                public void afterTextChanged(Editable s) {
+                }
+            });
+            yInput.addTextChangedListener(new TextWatcher() {
+                public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+                }
+
+                public void onTextChanged(CharSequence s, int a, int b, int c) {
+                    try {
+                        w.topDp = Math.max(0, Integer.parseInt(s.toString().trim()));
+                        renderAdv[0].run();
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                public void afterTextChanged(Editable s) {
+                }
+            });
+            LinearLayout whRow = new LinearLayout(context);
+            whRow.setOrientation(LinearLayout.HORIZONTAL);
+            EditText wInput = new EditText(context);
+            wInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+            wInput.setText(w.widthDp > 0 ? String.valueOf(w.widthDp) : "");
+            wInput.setHint("Auto");
+            EditText hInput = new EditText(context);
+            hInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+            hInput.setText(w.heightDp > 0 ? String.valueOf(w.heightDp) : "");
+            hInput.setHint("Auto");
+            whRow.addView(UiFields.wrap(context, wInput, "W dp", 0),
+                    new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            whRow.addView(UiFields.wrap(context, hInput, "H dp", 0),
+                    new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            advProps.addView(whRow);
+            wInput.addTextChangedListener(new TextWatcher() {
+                public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+                }
+
+                public void onTextChanged(CharSequence s, int a, int b, int c) {
+                    try {
+                        w.widthDp = s.length() == 0 ? 0 : Math.max(0, Integer.parseInt(s.toString().trim()));
+                        w.widthPercent = 0;
+                        renderAdv[0].run();
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                public void afterTextChanged(Editable s) {
+                }
+            });
+            hInput.addTextChangedListener(new TextWatcher() {
+                public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+                }
+
+                public void onTextChanged(CharSequence s, int a, int b, int c) {
+                    try {
+                        w.heightDp = s.length() == 0 ? 0 : Math.max(0, Integer.parseInt(s.toString().trim()));
+                        renderAdv[0].run();
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                public void afterTextChanged(Editable s) {
+                }
+            });
+            LinearLayout sizeButtons = new LinearLayout(context);
+            sizeButtons.setOrientation(LinearLayout.HORIZONTAL);
+            MaterialButton fullBtn = new MaterialButton(context);
+            fullBtn.setText("ملء العرض");
+            fullBtn.setOnClickListener(x -> {
+                w.leftDp = 0;
+                w.widthDp = 0;
+                w.widthPercent = 100;
+                renderAdv[0].run();
+                showAdvProps[0].run();
+            });
+            MaterialButton autoBtn = new MaterialButton(context);
+            autoBtn.setText("حجم تلقائي");
+            autoBtn.setOnClickListener(x -> {
+                w.widthDp = 0;
+                w.heightDp = 0;
+                w.widthPercent = 0;
+                renderAdv[0].run();
+                showAdvProps[0].run();
+            });
+            sizeButtons.addView(fullBtn, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            sizeButtons.addView(autoBtn, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            advProps.addView(sizeButtons);
             LinearLayout styleRow2 = new LinearLayout(context);
             styleRow2.setOrientation(LinearLayout.HORIZONTAL);
             MaterialButton copyBtn = new MaterialButton(context);
@@ -1462,15 +2101,62 @@ public class ApkOverlayTools {
             styleRow2.addView(pasteBtn, new LinearLayout.LayoutParams(0,
                     ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             advProps.addView(styleRow2);
-            MaterialButton delBtn = new MaterialButton(context);
-            delBtn.setText(context.getString(R.string.delete_widget));
-            delBtn.setOnClickListener(x -> {
-                advWidgets.remove(w);
-                advSelected[0] = null;
+            LinearLayout editActions = new LinearLayout(context);
+            editActions.setOrientation(LinearLayout.HORIZONTAL);
+            MaterialButton duplicateBtn = new MaterialButton(context);
+            duplicateBtn.setText("تكرار");
+            duplicateBtn.setOnClickListener(x -> {
+                pushAdvHistory.run();
+                OverlayInjectorUtil.AdvWidget copy = OverlayInjectorUtil.copyWidget(w);
+                if (copy == null) return;
+                copy.id = null;
+                copy.sourceKind = copy.kind;
+                copy.leftDp = w.leftDp + 12;
+                copy.topDp = w.topDp + 12;
+                advWidgets.add(copy);
+                advSelected[0] = copy;
                 renderAdv[0].run();
                 showAdvProps[0].run();
             });
-            advProps.addView(delBtn);
+            editActions.addView(duplicateBtn, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            if (!isBaseChromeWidget(w)) {
+                MaterialButton delBtn = new MaterialButton(context);
+                delBtn.setText(context.getString(R.string.delete_widget));
+                delBtn.setOnClickListener(x -> {
+                    pushAdvHistory.run();
+                    advWidgets.remove(w);
+                    advSelected[0] = null;
+                    renderAdv[0].run();
+                    showAdvProps[0].run();
+                });
+                editActions.addView(delBtn, new LinearLayout.LayoutParams(0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            }
+            advProps.addView(editActions);
+            LinearLayout orderRow = new LinearLayout(context);
+            orderRow.setOrientation(LinearLayout.HORIZONTAL);
+            MaterialButton frontBtn = new MaterialButton(context);
+            frontBtn.setText("للأمام");
+            frontBtn.setOnClickListener(x -> {
+                pushAdvHistory.run();
+                advWidgets.remove(w);
+                advWidgets.add(w);
+                renderAdv[0].run();
+            });
+            MaterialButton backBtn = new MaterialButton(context);
+            backBtn.setText("للخلف");
+            backBtn.setOnClickListener(x -> {
+                pushAdvHistory.run();
+                advWidgets.remove(w);
+                advWidgets.add(0, w);
+                renderAdv[0].run();
+            });
+            orderRow.addView(frontBtn, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            orderRow.addView(backBtn, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            advProps.addView(orderRow);
             if (w.kind.equals("image")) {
                 ImageView thumb = new ImageView(context);
                 thumb.setAdjustViewBounds(true);
@@ -1505,6 +2191,11 @@ public class ApkOverlayTools {
 
                 public void onTextChanged(CharSequence s, int a, int b, int c) {
                     w.text = s.toString();
+                    if ("@title".equals(w.id) && form.titleInput != null) {
+                        form.titleInput.setText(s.toString());
+                    } else if ("@message".equals(w.id) && form.msgInput != null) {
+                        form.msgInput.setText(s.toString());
+                    }
                     renderAdv[0].run();
                 }
 
@@ -1530,6 +2221,59 @@ public class ApkOverlayTools {
                 public void afterTextChanged(Editable s) {
                 }
             });
+            if (w.kind.equals("input") || w.kind.equals("textarea")
+                    || w.kind.equals("number") || w.kind.equals("search")) {
+                EditText hintInput = new EditText(context);
+                hintInput.setText(w.hint == null ? "" : w.hint);
+                advProps.addView(UiFields.wrap(context, hintInput, "نص التلميح / Hint", 0));
+                hintInput.addTextChangedListener(new TextWatcher() {
+                    public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+                    }
+
+                    public void onTextChanged(CharSequence s, int a, int b, int c) {
+                        w.hint = s.toString();
+                        renderAdv[0].run();
+                    }
+
+                    public void afterTextChanged(Editable s) {
+                    }
+                });
+            }
+            if (w.kind.equals("spinner") || w.kind.equals("list")
+                    || w.kind.equals("radio") || w.kind.equals("multiselect")) {
+                EditText optionsInput = new EditText(context);
+                optionsInput.setText(w.options == null ? "" : TextUtils.join("، ", w.options));
+                advProps.addView(UiFields.wrap(context, optionsInput,
+                        "الخيارات مفصولة بفاصلة", 0));
+                optionsInput.addTextChangedListener(new TextWatcher() {
+                    public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+                    }
+
+                    public void onTextChanged(CharSequence s, int a, int b, int c) {
+                        String[] parts = s.toString().split("[,،\\n]");
+                        List<String> options = new ArrayList<>();
+                        for (String part : parts) {
+                            String value = part.trim();
+                            if (!value.isEmpty()) options.add(value);
+                        }
+                        w.options = options;
+                        renderAdv[0].run();
+                    }
+
+                    public void afterTextChanged(Editable s) {
+                    }
+                });
+            }
+            if (w.kind.equals("checkbox") || w.kind.equals("toggle")) {
+                MaterialSwitch checkedSwitch = new MaterialSwitch(context);
+                checkedSwitch.setText("محدد / مفعل");
+                checkedSwitch.setChecked(w.checked);
+                checkedSwitch.setOnCheckedChangeListener((b, checked) -> {
+                    w.checked = checked;
+                    renderAdv[0].run();
+                });
+                advProps.addView(checkedSwitch);
+            }
             LinearLayout fmtRow = new LinearLayout(context);
             fmtRow.setOrientation(LinearLayout.HORIZONTAL);
             advProps.addView(fmtRow);
@@ -1537,11 +2281,27 @@ public class ApkOverlayTools {
             attachFormatMenu(textInput);
             LinearLayout colorRow = new LinearLayout(context);
             colorRow.setOrientation(LinearLayout.HORIZONTAL);
+            MaterialButton textColorBtn = new MaterialButton(context);
+            textColorBtn.setText(w.textColor == 0 ? "لون النص" : String.format("النص #%08X", w.textColor));
+            textColorBtn.setOnClickListener(x -> showColorWheel(
+                    w.textColor == 0 ? 0xFF1B1B1F : w.textColor, (argb, hex) -> {
+                        w.textColor = argb;
+                        textColorBtn.setText("النص " + hex);
+                        renderAdv[0].run();
+                    }));
+            textColorBtn.setOnLongClickListener(x -> {
+                w.textColor = 0;
+                textColorBtn.setText("لون النص");
+                renderAdv[0].run();
+                return true;
+            });
+            colorRow.addView(textColorBtn, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             MaterialButton fontBtn = new MaterialButton(context);
             fontBtn.setText(widgetFontLabel(w));
             fontBtn.setOnClickListener(x -> showFontPicker(w, fontBtn));
-            colorRow.addView(fontBtn, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            colorRow.addView(fontBtn, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             advProps.addView(colorRow);
             LinearLayout styleRow = new LinearLayout(context);
             styleRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -1836,47 +2596,43 @@ public class ApkOverlayTools {
             }
         };
 
+        final MaterialButton advUndoBtn = view.findViewById(R.id.advUndoBtn);
+        final MaterialButton advRedoBtn = view.findViewById(R.id.advRedoBtn);
+        final MaterialAutoCompleteTextView advLayers = view.findViewById(R.id.advLayers);
+        final MaterialAutoCompleteTextView advAlign = view.findViewById(R.id.advAlign);
+        final MaterialAutoCompleteTextView advTheme = view.findViewById(R.id.advTheme);
+        final MaterialSwitch advGridSwitch = view.findViewById(R.id.advGridSwitch);
         renderAdv[0] = () -> {
+            try {
+            final int renderToken = ++advRenderToken[0];
             advCanvas.removeAllViews();
+            ensureChromeWidgets(advWidgets, form);
             boolean richText = form.dlgHtml != null && form.dlgHtml.isChecked();
             for (OverlayInjectorUtil.AdvWidget w : new ArrayList<>(advWidgets)) {
-                View vw;
-                if (w.kind.equals("image")) {
-                    ImageView iv = new ImageView(context);
-                    iv.setAdjustViewBounds(true);
-                    if (w.imageB64 != null && !w.imageB64.isEmpty()) {
-                        try {
-                            byte[] bytes = Base64.decode(w.imageB64, Base64.DEFAULT);
-                            Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                            if (bitmap != null) iv.setImageBitmap(bitmap);
-                        } catch (Exception ignored) {
-                        }
-                    } else {
-                        iv.setBackgroundColor(0xFF9E9E9E);
-                    }
-                    vw = iv;
-                } else if (w.kind.equals("button")) {
-                    MaterialButton btn = new MaterialButton(context);
-                    btn.setText(displayText(w.text == null || w.text.isEmpty() ? context.rss.getString(R.string.button) : w.text, richText));
-                    btn.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : 14f);
-                    if (w.textColor != 0) btn.setTextColor(w.textColor);
-                    applyWidgetTypeface(btn, w, form);
-                    btn.setBackground(buildButtonDrawable(w));
-                    vw = btn;
+                View vw = previewWidget(w, richText, form);
+                if (w == advSelected[0]) {
+                    vw.setAlpha(0.9f);
+                    vw.setElevation(dp(6));
+                    GradientDrawable outline = new GradientDrawable();
+                    outline.setCornerRadius(dp(12));
+                    outline.setStroke(dp(2), 0xFF3B6CF6);
+                    vw.setForeground(outline);
                 } else {
-                    TextView tv = new TextView(context);
-                    tv.setText(displayText(w.text == null || w.text.isEmpty() ? "Text" : w.text, richText));
-                    tv.setTextSize(w.textSizeSp > 0 ? w.textSizeSp : 16f);
-                    if (w.textColor != 0) tv.setTextColor(w.textColor);
-                    applyWidgetTypeface(tv, w, form);
-                    vw = tv;
+                    vw.setForeground(null);
                 }
-                if (w == advSelected[0]) vw.setAlpha(0.65f);
                 vw.setTag(w);
                 FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 lp.leftMargin = (int) (w.leftDp * advDensity);
                 lp.topMargin = (int) (w.topDp * advDensity);
+                if (w.widthDp > 0) lp.width = (int) (w.widthDp * advDensity);
+                else if (w.widthPercent > 0 && w.widthPercent < 100) {
+                    int cw = advCanvas.getWidth();
+                    if (cw > 0) lp.width = Math.max(1, (int) (cw * w.widthPercent / 100f));
+                } else if (w.widthPercent >= 100) {
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                }
+                if (w.heightDp > 0) lp.height = (int) (w.heightDp * advDensity);
                 vw.setLayoutParams(lp);
                 vw.setOnTouchListener(new View.OnTouchListener() {
                     float lastX;
@@ -1890,6 +2646,7 @@ public class ApkOverlayTools {
                         FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) v.getLayoutParams();
                         switch (event.getActionMasked()) {
                             case MotionEvent.ACTION_DOWN:
+                                pushAdvHistory.run();
                                 lastX = event.getRawX();
                                 lastY = event.getRawY();
                                 moved = false;
@@ -1950,6 +2707,15 @@ public class ApkOverlayTools {
                                 }
                                 if (!moved) {
                                     advSelected[0] = w;
+                                    String action = w.btnAction == null ? "" : w.btnAction;
+                                    if (dialogStudio != null) {
+                                        dialogStudio.previewAction(w, action);
+                                    }
+                                    renderAdv[0].run();
+                                    showAdvProps[0].run();
+                                }
+                                if (!moved) {
+                                    advSelected[0] = w;
                                     renderAdv[0].run();
                                     showAdvProps[0].run();
                                 }
@@ -1967,10 +2733,161 @@ public class ApkOverlayTools {
                     }
                 });
                 advCanvas.addView(vw);
+                if (w == advSelected[0]) {
+                    advCanvas.post(() -> {
+                        if (renderToken != advRenderToken[0] || advSelected[0] != w) return;
+                        final View handle = new View(context);
+                        GradientDrawable hb = new GradientDrawable();
+                        hb.setShape(GradientDrawable.OVAL);
+                        hb.setColor(0xFF3B6CF6);
+                        hb.setStroke(dp(2), 0xFFFFFFFF);
+                        handle.setBackground(hb);
+                        handle.setElevation(dp(8));
+                        final int baseLeft = vw.getLeft() - advCanvas.getPaddingLeft();
+                        final int baseTop = vw.getTop() - advCanvas.getPaddingTop();
+                        FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(dp(22), dp(22));
+                        hp.leftMargin = baseLeft + vw.getWidth() - dp(11);
+                        hp.topMargin = baseTop + vw.getHeight() - dp(11);
+                        handle.setLayoutParams(hp);
+                        handle.setOnTouchListener((hv, event) -> {
+                            FrameLayout.LayoutParams vp = (FrameLayout.LayoutParams) vw.getLayoutParams();
+                            switch (event.getActionMasked()) {
+                                case MotionEvent.ACTION_DOWN:
+                                    pushAdvHistory.run();
+                                    hv.setTag(new float[]{event.getRawX(), event.getRawY(),
+                                            vp.width > 0 ? vp.width : vw.getWidth(),
+                                            vp.height > 0 ? vp.height : vw.getHeight()});
+                                    if (hv.getParent() != null) {
+                                        hv.getParent().requestDisallowInterceptTouchEvent(true);
+                                    }
+                                    return true;
+                                case MotionEvent.ACTION_MOVE: {
+                                    float[] start = (float[]) hv.getTag();
+                                    if (start == null) return true;
+                                    int nw = Math.max(dp(28),
+                                            (int) (start[2] + (event.getRawX() - start[0])));
+                                    int nh = Math.max(dp(20),
+                                            (int) (start[3] + (event.getRawY() - start[1])));
+                                    vp.width = nw;
+                                    vp.height = nh;
+                                    vw.setLayoutParams(vp);
+                                    w.widthPercent = 0;
+                                    w.widthDp = Math.max(1, Math.round(nw / advDensity));
+                                    w.heightDp = Math.max(1, Math.round(nh / advDensity));
+                                    FrameLayout.LayoutParams hlp =
+                                            (FrameLayout.LayoutParams) handle.getLayoutParams();
+                                    hlp.leftMargin = baseLeft + nw - dp(11);
+                                    hlp.topMargin = baseTop + nh - dp(11);
+                                    handle.setLayoutParams(hlp);
+                                    return true;
+                                }
+                                case MotionEvent.ACTION_UP:
+                                case MotionEvent.ACTION_CANCEL:
+                                    if (hv.getParent() != null) {
+                                        hv.getParent().requestDisallowInterceptTouchEvent(false);
+                                    }
+                                    renderAdv[0].run();
+                                    showAdvProps[0].run();
+                                    return true;
+                            }
+                            return false;
+                        });
+                        advCanvas.addView(handle);
+                    });
+                }
+            }
+            refreshLayers(advLayers, advWidgets, advSelected[0]);
+            advUndoBtn.setEnabled(!advUndo.isEmpty());
+            if (advRedoBtn != null) advRedoBtn.setEnabled(!advRedo.isEmpty());
+            if (advCanvas.getWidth() == 0) {
+                advCanvas.post(() -> {
+                    if (renderToken == advRenderToken[0] && advCanvas.getWidth() > 0) {
+                        renderAdv[0].run();
+                    }
+                });
+            }
+            } catch (Exception e) {
+                advCanvas.removeAllViews();
+                TextView error = new TextView(context);
+                error.setText("تعذر عرض المعاينة: " + e.getMessage());
+                error.setTextSize(13);
+                error.setPadding(dp(12), dp(12), dp(12), dp(12));
+                advCanvas.addView(error);
+                advUndoBtn.setEnabled(!advUndo.isEmpty());
+                if (advRedoBtn != null) advRedoBtn.setEnabled(!advRedo.isEmpty());
             }
         };
+        if (advProps != null) {
+            advProps.getViewTreeObserver().addOnGlobalFocusChangeListener((oldFocus, newFocus) -> {
+                if (newFocus != null && isInsideView(newFocus, advProps)) pushAdvHistory.run();
+            });
+        }
+        advUndoBtn.setOnClickListener(v -> {
+            if (advUndo.isEmpty()) return;
+            advRedo.push(advSnapshot.get());
+            while (advRedo.size() > 40) advRedo.removeLast();
+            advRestore.accept(advUndo.pop());
+        });
+        if (advRedoBtn != null) {
+            advRedoBtn.setOnClickListener(v -> {
+                if (advRedo.isEmpty()) return;
+                advUndo.push(advSnapshot.get());
+                while (advUndo.size() > 40) advUndo.removeLast();
+                advRestore.accept(advRedo.pop());
+            });
+        }
 
+        if (advGridSwitch != null) {
+            advGridSwitch.setOnCheckedChangeListener((button, checked) ->
+                    advCanvas.setBackground(checked ? buildGridDrawable() : null));
+        }
+        if (advAlign != null) {
+            String[] alignLabels = {"يسار", "وسط أفقي", "يمين", "أعلى", "وسط رأسي", "أسفل"};
+            advAlign.setAdapter(new ArrayAdapter<>(context,
+                    android.R.layout.simple_dropdown_item_1line, alignLabels));
+            advAlign.setOnItemClickListener((parent, v, position, id) -> {
+                OverlayInjectorUtil.AdvWidget w = advSelected[0];
+                if (w == null) {
+                    Extensions.showMessage(context, "اختر عنصرًا أولًا");
+                    advAlign.setText("", false);
+                    return;
+                }
+                pushAdvHistory.run();
+                View widgetView = advCanvas.findViewWithTag(w);
+                int cw = Math.max(1, advCanvas.getWidth()
+                        - advCanvas.getPaddingLeft() - advCanvas.getPaddingRight());
+                int ch = Math.max(1, advCanvas.getHeight()
+                        - advCanvas.getPaddingTop() - advCanvas.getPaddingBottom());
+                int ww = widgetView != null && widgetView.getWidth() > 0
+                        ? widgetView.getWidth()
+                        : Math.round((w.widthPercent >= 100
+                        ? cw : (w.widthDp > 0 ? w.widthDp : 120) * advDensity));
+                int hh = widgetView != null && widgetView.getHeight() > 0
+                        ? widgetView.getHeight()
+                        : Math.round((w.heightDp > 0 ? w.heightDp : 44) * advDensity);
+                switch (position) {
+                    case 0: w.leftDp = 0; break;
+                    case 1: w.leftDp = Math.max(0, Math.round((cw - ww) / 2f / advDensity)); break;
+                    case 2: w.leftDp = Math.max(0, Math.round((cw - ww) / advDensity)); break;
+                    case 3: w.topDp = 0; break;
+                    case 4: w.topDp = Math.max(0, Math.round((ch - hh) / 2f / advDensity)); break;
+                    case 5: w.topDp = Math.max(0, Math.round((ch - hh) / advDensity)); break;
+                }
+                renderAdv[0].run();
+                showAdvProps[0].run();
+                advAlign.setText("", false);
+            });
+        }
+        if (advLayers != null) {
+            advLayers.setOnItemClickListener((parent, v, position, id) -> {
+                if (position < 0 || position >= advWidgets.size()) return;
+                advSelected[0] = advWidgets.get(position);
+                renderAdv[0].run();
+                showAdvProps[0].run();
+            });
+        }
         view.findViewById(R.id.advAddText).setOnClickListener(v -> {
+            pushAdvHistory.run();
             OverlayInjectorUtil.AdvWidget w = new OverlayInjectorUtil.AdvWidget();
             w.kind = "text";
             w.text = context.rss.getString(R.string.text);
@@ -1983,6 +2900,7 @@ public class ApkOverlayTools {
             showAdvProps[0].run();
         });
         view.findViewById(R.id.advAddImage).setOnClickListener(v -> {
+            pushAdvHistory.run();
             OverlayInjectorUtil.AdvWidget w = new OverlayInjectorUtil.AdvWidget();
             w.kind = "image";
             w.leftDp = 16;
@@ -1998,6 +2916,7 @@ public class ApkOverlayTools {
             });
         });
         view.findViewById(R.id.advAddButton).setOnClickListener(v -> {
+            pushAdvHistory.run();
             OverlayInjectorUtil.AdvWidget w = new OverlayInjectorUtil.AdvWidget();
             w.kind = "button";
             w.text = "Button";
@@ -2010,6 +2929,113 @@ public class ApkOverlayTools {
             renderAdv[0].run();
             showAdvProps[0].run();
         });
+        MaterialAutoCompleteTextView addKind = view.findViewById(R.id.advAddKind);
+        if (addKind != null) {
+            String[] addLabels = {"نص", "عنوان", "وصف", "زر", "صورة", "أيقونة",
+                    "حقل إدخال", "مربع اختيار", "مفتاح تبديل", "قائمة منسدلة",
+                    "شريط تقدم", "فاصل", "بطاقة"};
+            String[] addKinds = {"text", "title", "message", "button", "image", "icon",
+                    "input", "checkbox", "toggle", "spinner", "progress", "divider", "card"};
+            addKind.setAdapter(new ArrayAdapter<>(context,
+                    android.R.layout.simple_dropdown_item_1line, addLabels));
+            addKind.setText(addLabels[0], false);
+            View addComponent = view.findViewById(R.id.advAddComponent);
+            if (addComponent != null) addComponent.setOnClickListener(v -> {
+                String label = addKind.getText() == null ? "" : addKind.getText().toString();
+                int kindIndex = 0;
+                for (int i = 0; i < addLabels.length; i++) {
+                    if (addLabels[i].equals(label)) {
+                        kindIndex = i;
+                        break;
+                    }
+                }
+                pushAdvHistory.run();
+                OverlayInjectorUtil.AdvWidget w = new OverlayInjectorUtil.AdvWidget();
+                w.kind = addKinds[kindIndex];
+                w.sourceKind = w.kind;
+                w.leftDp = 12;
+                w.topDp = 118 + 26 * Math.max(0, advWidgets.size() - 4);
+                w.widthPercent = 100;
+                w.textSizeSp = 15f;
+                switch (w.kind) {
+                    case "title":
+                        w.text = "عنوان جديد";
+                        w.textSizeSp = 20f;
+                        w.fontStyle = 1;
+                        break;
+                    case "message":
+                        w.text = "وصف جديد";
+                        break;
+                    case "button":
+                        w.text = "زر جديد";
+                        w.textSizeSp = 14f;
+                        w.widthDp = 120;
+                        w.heightDp = 44;
+                        w.btnBg = 0xFF3B6CF6;
+                        w.btnBg2 = 0xFF2F5BEA;
+                        w.btnCornerRadiusDp = 22f;
+                        w.btnPaddingDp = 12;
+                        w.textColor = 0xFFFFFFFF;
+                        w.btnAction = "Dismiss";
+                        break;
+                    case "image":
+                        w.widthDp = 180;
+                        w.heightDp = 90;
+                        break;
+                    case "icon":
+                        w.text = "★";
+                        w.textSizeSp = 28f;
+                        w.widthDp = 48;
+                        w.heightDp = 48;
+                        break;
+                    case "input":
+                        w.hint = "أدخل النص";
+                        w.heightDp = 44;
+                        break;
+                    case "checkbox":
+                        w.text = "خيار";
+                        w.checked = true;
+                        break;
+                    case "toggle":
+                        w.text = "تفعيل";
+                        w.checked = true;
+                        break;
+                    case "spinner":
+                        w.options = new ArrayList<>(Arrays.asList("الخيار 1", "الخيار 2", "الخيار 3"));
+                        break;
+                    case "progress":
+                        w.heightDp = 18;
+                        break;
+                    case "divider":
+                        w.heightDp = 1;
+                        break;
+                    case "card":
+                        w.text = "بطاقة جديدة";
+                        w.heightDp = 64;
+                        break;
+                    default:
+                        w.text = "نص جديد";
+                        break;
+                }
+                advWidgets.add(w);
+                advSelected[0] = w;
+                renderAdv[0].run();
+                showAdvProps[0].run();
+                if ("image".equals(w.kind)) {
+                    pickImage((thumb, b64) -> {
+                        w.imageB64 = b64;
+                        renderAdv[0].run();
+                        showAdvProps[0].run();
+                    });
+                }
+            });
+        }
+        advCanvas.setOnClickListener(v -> {
+            advSelected[0] = null;
+            renderAdv[0].run();
+            showAdvProps[0].run();
+        });
+        renderAdv[0].run();
         showAdvProps[0].run();
 
         LinearLayout toastSection = view.findViewById(R.id.overlayToastSection);
@@ -2092,10 +3118,26 @@ public class ApkOverlayTools {
                     }
                     updateStylePreview(form);
                     updatePreviewImage(form);
+                    if (advancedSection.getVisibility() == View.VISIBLE) {
+                        renderAdv[0].run();
+                    }
                 }
             } catch (Exception ignored) {
             }
         };
+        if (advTheme != null) {
+            String[] themeLabels = {"زجاج أزرق", "فاتح ناعم", "داكن", "نيون", "بلا خلفية"};
+            advTheme.setAdapter(new ArrayAdapter<>(context,
+                    android.R.layout.simple_dropdown_item_1line, themeLabels));
+            advTheme.setOnItemClickListener((parent, v, position, id) -> {
+                pushAdvHistory.run();
+                applyDialogTheme(form, position, advWidgets);
+                updatePreview.run();
+                renderAdv[0].run();
+                showAdvProps[0].run();
+                advTheme.setText("", false);
+            });
+        }
         TextWatcher previewWatcher = new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {
             }
@@ -2127,6 +3169,8 @@ public class ApkOverlayTools {
             if (dialogSection2 != null) dialogSection2.setVisibility(isDialog ? View.VISIBLE : View.GONE);
             if (styleSection != null) styleSection.setVisibility(isToast ? View.GONE : View.VISIBLE);
             advancedSection.setVisibility(isAdvanced ? View.VISIBLE : View.GONE);
+            View studioPanel = view.findViewById(R.id.dialogStudioPanel);
+            if (studioPanel != null) studioPanel.setVisibility(isAdvanced ? View.VISIBLE : View.GONE);
         };
         modeTv.setOnItemClickListener((p, v, pos, id) -> {
             profileTv.setText("", false);
@@ -2333,6 +3377,18 @@ public class ApkOverlayTools {
         autosign.setChecked(sign[0] = settings.getBoolean("autosign", true));
         autosign.setOnCheckedChangeListener((buttonView, isChecked) -> settings.edit().putBoolean("autosign", sign[0] = isChecked).apply());
         view.findViewById(R.id.overlaySignSettings).setOnClickListener(uiHelper.showSignSettingsDialog());
+        dialogStudio = new DialogStudioController(context, new DialogStudioController.Host() {
+            @Override public List<OverlayInjectorUtil.AdvWidget> widgets() { return advWidgets; }
+            @Override public void refreshCanvas() { if (renderAdv[0] != null) renderAdv[0].run(); }
+            @Override public void status(String message) { }
+            @Override public void inject() {
+                if (activeOverlayDialog != null) {
+                    activeOverlayDialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick();
+                }
+            }
+        });
+        dialogStudio.attach(view, null);
+        syncModeSections.run();
         activeOverlayForm = form;
 
         AlertDialog overlayDialog = dialogUtil.getDialogBuilder()
@@ -2355,7 +3411,9 @@ public class ApkOverlayTools {
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .create();
+        activeOverlayDialog = overlayDialog;
         overlayDialog.setOnDismissListener(d -> {
+            activeOverlayDialog = null;
             activeOverlayForm = null;
             activeAdvRender = null;
             overlayImageBase64 = null;

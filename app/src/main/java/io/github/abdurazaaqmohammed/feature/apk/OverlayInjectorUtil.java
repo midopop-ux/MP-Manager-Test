@@ -17,6 +17,7 @@ import com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile;
 import com.android.tools.smali.dexlib2.iface.ClassDef;
 import com.android.tools.smali.dexlib2.iface.MultiDexContainer;
 import com.android.tools.smali.dexlib2.DexFileFactory;
+import com.apk.axml.aXMLDecoder;
 import com.reandroid.apk.APKLogger;
 
 import net.lingala.zip4j.ZipFile;
@@ -44,6 +45,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import io.github.abdurazaaqmohammed.MPManager.R;
+import io.github.abdurazaaqmohammed.feature.apk.dialogstudio.DsSpec;
+import io.github.abdurazaaqmohammed.feature.apk.dialogstudio.SmaliStudioInjector;
 
 public class OverlayInjectorUtil {
 
@@ -65,8 +68,13 @@ public class OverlayInjectorUtil {
     }
 
     public static class AdvWidget {
+        public String id = "";
         public String kind = "text";
+        public String sourceKind = "";
         public String text = "";
+        public String hint = "";
+        public java.util.List<String> options;
+        public boolean checked;
         public float textSizeSp = 16f;
         public int textColor;
         public int fontStyle;
@@ -87,6 +95,10 @@ public class OverlayInjectorUtil {
         public boolean btnAnimRainbow;
         public int leftDp;
         public int topDp;
+        public int widthDp;
+        public int heightDp;
+        public int widthPercent = 100;
+        public int gravity;
     }
 
     public static class DialogOptions {
@@ -124,16 +136,27 @@ public class OverlayInjectorUtil {
         public int msgColor;
         public int btnColor;
         public boolean advanced;
+        public int delayMs;
+        public boolean preventDoubleOpen;
+        public float widthPercent;
+        public float dimAmount = -1f;
         public String dlgFont = "";
         public String dlgFontPath = "";
+        public DsSpec studio;
+        public transient SmaliStudioInjector.Plan studioPlan;
         public List<AdvWidget> widgets;
     }
 
     public static AdvWidget copyWidget(AdvWidget w) {
         if (w == null) return null;
         AdvWidget c = new AdvWidget();
+        c.id = w.id;
         c.kind = w.kind;
+        c.sourceKind = w.sourceKind;
         c.text = w.text;
+        c.hint = w.hint;
+        c.options = w.options == null ? null : new ArrayList<>(w.options);
+        c.checked = w.checked;
         c.textSizeSp = w.textSizeSp;
         c.textColor = w.textColor;
         c.fontStyle = w.fontStyle;
@@ -154,7 +177,68 @@ public class OverlayInjectorUtil {
         c.btnAnimRainbow = w.btnAnimRainbow;
         c.leftDp = w.leftDp;
         c.topDp = w.topDp;
+        c.widthDp = w.widthDp;
+        c.heightDp = w.heightDp;
+        c.widthPercent = w.widthPercent;
+        c.gravity = w.gravity;
         return c;
+    }
+
+    /**
+     * Disassembles the dex files of an APK and runs the Dialog Studio recovery
+     * scanner over the generated smali. This is a real APK-level recovery path,
+     * not a manifest-only guess.
+     */
+    public static java.util.List<io.github.abdurazaaqmohammed.feature.apk.dialogstudio.DsRecovery.Found>
+    scanApkForDialogs(Context context, File apk, APKLogger logger) throws Exception {
+        java.util.List<io.github.abdurazaaqmohammed.feature.apk.dialogstudio.DsRecovery.Found> out =
+                new ArrayList<>();
+        File root = new File(context.getCacheDir(), "dialog_studio_" + System.currentTimeMillis());
+        if (!root.mkdirs() && !root.isDirectory()) return out;
+        BaksmaliOptions options = FastDexPatch.defaultBaksmaliOptions();
+        try (ZipFile zin = new ZipFile(apk)) {
+            int layoutCount = 0;
+            for (FileHeader header : zin.getFileHeaders()) {
+                String entry = header.getFileName();
+                if (entry == null || !entry.startsWith("res/layout")
+                        || !entry.endsWith(".xml") || header.getUncompressedSize() > 2_000_000L) continue;
+                try (InputStream in = zin.getInputStream(header)) {
+                    String xml = new aXMLDecoder(in).decodeAsString();
+                    io.github.abdurazaaqmohammed.feature.apk.dialogstudio.DsRecovery.Found found =
+                            io.github.abdurazaaqmohammed.feature.apk.dialogstudio.DsRecovery
+                                    .scanXml(entry, xml);
+                    if (found != null) {
+                        found.note = "استُعيد من موارد APK المضغوطة.";
+                        out.add(found);
+                    }
+                } catch (Throwable t) {
+                    if (logger != null) logger.logMessage("Dialog Studio layout: " + entry
+                            + " -> " + t.getMessage());
+                }
+                if (++layoutCount >= 500) break;
+            }
+            for (FileHeader header : zin.getFileHeaders()) {
+                String entry = header.getFileName();
+                if (entry == null || !entry.matches("classes[0-9]*\\.dex")) continue;
+                try {
+                    byte[] bytes = FastDexPatch.readDexBytes(apk, entry);
+                    if (bytes == null || bytes.length == 0) continue;
+                    DexBackedDexFile dex = new DexBackedDexFile(Opcodes.getDefault(), bytes);
+                    Set<String> descriptors = new LinkedHashSet<>();
+                    for (ClassDef def : dex.getClasses()) descriptors.add(def.getType());
+                    if (descriptors.isEmpty()) continue;
+                    File patchDir = new File(root, entry.replace('.', '_'));
+                    Map<String, File> files = FastDexPatch.disassembleClasses(
+                            context, dex, descriptors, patchDir, options, logger);
+                    if (files == null || files.isEmpty()) continue;
+                    out.addAll(io.github.abdurazaaqmohammed.feature.apk.dialogstudio.DsRecovery
+                            .scanDirectory(patchDir, 400));
+                } catch (Throwable t) {
+                    if (logger != null) logger.logMessage("Dialog Studio: " + entry + " -> " + t.getMessage());
+                }
+            }
+        }
+        return out;
     }
 
     public static File addOverlayToActivities(Context context, File inputApk,
@@ -426,12 +510,9 @@ public class OverlayInjectorUtil {
                                     String noshowListener, String blinkListener,
                                     String dismissListener, Map<String, String> fontAssets,
                                     String waveRgb) {
-        String base = classDescriptor.substring(0, classDescriptor.length() - 1);
-        String dragListener = opts != null && opts.draggable ? base + "$mpDrag;" : null;
-        String videoHelper = hasVideo(opts) ? base + "$mpVideo;" : null;
         return dialogHelperSmali(classDescriptor, opts, urlListener, urlViewListener,
                 noshowListener, blinkListener, dismissListener, fontAssets, waveRgb,
-                dragListener, videoHelper);
+                null, null, opts == null ? null : opts.studioPlan);
     }
 
     static String dialogHelperSmali(String classDescriptor, DialogOptions opts,
@@ -439,6 +520,17 @@ public class OverlayInjectorUtil {
                                     String noshowListener, String blinkListener,
                                     String dismissListener, Map<String, String> fontAssets,
                                     String waveRgb, String dragListener, String videoHelper) {
+        return dialogHelperSmali(classDescriptor, opts, urlListener, urlViewListener,
+                noshowListener, blinkListener, dismissListener, fontAssets, waveRgb,
+                dragListener, videoHelper, opts == null ? null : opts.studioPlan);
+    }
+
+    static String dialogHelperSmali(String classDescriptor, DialogOptions opts,
+                                    String urlListener, String urlViewListener,
+                                    String noshowListener, String blinkListener,
+                                    String dismissListener, Map<String, String> fontAssets,
+                                    String waveRgb, String dragListener, String videoHelper,
+                                    SmaliStudioInjector.Plan plan) {
         boolean titleColored = opts.titleColor != 0;
         boolean msgColored = opts.msgColor != 0;
         boolean btnColored = opts.btnColor != 0;
@@ -456,9 +548,11 @@ public class OverlayInjectorUtil {
         boolean useAdvanced = opts.advanced && opts.widgets != null && !opts.widgets.isEmpty();
         boolean useDlgFont = needsFontWalk(opts);
         boolean useDrag = opts.draggable && dragListener != null;
+        boolean needDialogRef = plan != null && (plan.hasActions || plan.hasGuard
+                || !plan.closeType.isEmpty() || !plan.timeoutType.isEmpty());
         StringBuilder sb = new StringBuilder();
         sb.append(".method private ").append(DIALOG_HELPER).append("()V\n");
-        sb.append("    .locals ").append(useAdvanced ? 8 : (useAnim || useDlgFont || useWave) ? 6 : 5).append("\n");
+        sb.append("    .locals 8\n");
         if (opts.dontShowAgain) {
             sb.append("    invoke-static {p0}, Landroid/preference/PreferenceManager;->getDefaultSharedPreferences(Landroid/content/Context;)Landroid/content/SharedPreferences;\n");
             sb.append("    move-result-object v0\n");
@@ -490,7 +584,7 @@ public class OverlayInjectorUtil {
         sb.append("    new-instance v0, Landroid/app/AlertDialog$Builder;\n");
         sb.append("    invoke-direct {v0, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V\n");
         if (useAdvanced) {
-            sb.append(advancedViewSmali(opts, urlViewListener, dismissListener, blinkListener, fontAssets, waveRgb, videoHelper));
+            sb.append(advancedViewSmali(opts, urlViewListener, dismissListener, blinkListener, fontAssets, waveRgb, videoHelper, plan));
         } else {
             if (title != null && !title.isEmpty()) {
             sb.append(loadTextSmali(title, opts.base64, titleHtml, 1, 2));
@@ -593,6 +687,41 @@ public class OverlayInjectorUtil {
             sb.append("    sput-object v5, ").append(dismissListener).append("->dlg:Landroid/content/DialogInterface;\n");
             resultTaken = true;
         }
+        if (needDialogRef && !resultTaken) {
+            sb.append("    move-result-object v0\n");
+            resultTaken = true;
+        }
+        if (needDialogRef) {
+            if (plan != null && plan.hasActions) {
+                sb.append("    sput-object v0, ").append(plan.actionsType).append("->dlg:Landroid/content/DialogInterface;\n");
+            }
+            if (plan != null && !plan.closeType.isEmpty()) {
+                sb.append("    new-instance v5, ").append(plan.closeType).append("\n");
+                sb.append("    invoke-direct {v5, p0}, ").append(plan.closeType).append("-><init>(Landroid/content/Context;)V\n");
+                sb.append("    invoke-virtual {v0, v5}, Landroid/app/Dialog;->setOnDismissListener(Landroid/content/DialogInterface$OnDismissListener;)V\n");
+            }
+            if (plan != null && !plan.timeoutType.isEmpty()) {
+                DsSpec.Event timeoutEvent = opts.studio == null ? null
+                        : opts.studio.findEvent("@dialog", "TIMEOUT");
+                int timeoutMs = timeoutEvent == null || timeoutEvent.timeoutMs <= 0
+                        ? 5000 : timeoutEvent.timeoutMs;
+                sb.append("    new-instance v5, Landroid/os/Handler;\n");
+                sb.append("    invoke-static {}, Landroid/os/Looper;->getMainLooper()Landroid/os/Looper;\n");
+                sb.append("    move-result-object v1\n");
+                sb.append("    invoke-direct {v5, v1}, Landroid/os/Handler;-><init>(Landroid/os/Looper;)V\n");
+                sb.append("    new-instance v7, ").append(plan.timeoutType).append("\n");
+                sb.append("    invoke-direct {v7, p0}, ").append(plan.timeoutType).append("-><init>(Landroid/content/Context;)V\n");
+                sb.append("    const-wide v2, 0x").append(Long.toHexString(timeoutMs)).append("L\n");
+                sb.append("    invoke-virtual {v5, v7, v2, v3}, Landroid/os/Handler;->postDelayed(Ljava/lang/Runnable;J)Z\n");
+                sb.append("    move-result v1\n");
+            }
+            if (plan != null && opts.studio != null
+                    && opts.studio.findEvent("@dialog", "OPEN") != null
+                    && plan.openMethod != null && !plan.openMethod.isEmpty()) {
+                sb.append("    invoke-static {p0, v0}, ").append(plan.actionsType).append("->")
+                        .append(plan.openMethod).append("(Landroid/content/Context;Landroid/content/DialogInterface;)V\n");
+            }
+        }
         if ((useDlgFont || useBg || useDrag) && !resultTaken) {
             sb.append("    move-result-object v0\n");
         }
@@ -642,6 +771,26 @@ public class OverlayInjectorUtil {
             sb.append("    const/4 v2, -0x2\n");
             sb.append("    iput v2, v1, Landroid/view/WindowManager$LayoutParams;->width:I\n");
             sb.append("    iput v2, v1, Landroid/view/WindowManager$LayoutParams;->height:I\n");
+            if (opts.widthPercent > 0) {
+                sb.append("    invoke-virtual {p0}, Landroid/content/Context;->getResources()Landroid/content/res/Resources;\n");
+                sb.append("    move-result-object v5\n");
+                sb.append("    invoke-virtual {v5}, Landroid/content/res/Resources;->getDisplayMetrics()Landroid/util/DisplayMetrics;\n");
+                sb.append("    move-result-object v5\n");
+                sb.append("    iget v5, v5, Landroid/util/DisplayMetrics;->widthPixels:I\n");
+                sb.append("    int-to-float v5, v5\n");
+                sb.append("    const v2, 0x").append(Integer.toHexString(Float.floatToRawIntBits(
+                        Math.min(100f, opts.widthPercent) / 100f))).append("\n");
+                sb.append("    mul-float v5, v5, v2\n");
+                sb.append("    float-to-int v5, v5\n");
+                sb.append("    iput v5, v1, Landroid/view/WindowManager$LayoutParams;->width:I\n");
+            }
+            if (opts.dimAmount >= 0) {
+                sb.append("    const v5, 0x").append(Integer.toHexString(Float.floatToRawIntBits(
+                        Math.min(1f, opts.dimAmount)))).append("\n");
+                sb.append("    iput v5, v1, Landroid/view/WindowManager$LayoutParams;->dimAmount:F\n");
+                sb.append("    const/4 v5, 0x2\n");
+                sb.append("    invoke-virtual {v0, v5}, Landroid/view/Window;->addFlags(I)V\n");
+            }
             sb.append("    invoke-virtual {v0, v1}, Landroid/view/Window;->setAttributes(Landroid/view/WindowManager$LayoutParams;)V\n");
         }
         if (useAnim) {
@@ -912,14 +1061,16 @@ public class OverlayInjectorUtil {
     }
 
     static String advancedViewSmali(DialogOptions opts, String urlViewListener, String dismissListener,
-                                      String blinkListener, Map<String, String> fontAssets,
-                                      String waveRgb) {
-        return advancedViewSmali(opts, urlViewListener, dismissListener, blinkListener, fontAssets, waveRgb, null);
+                                    String blinkListener, Map<String, String> fontAssets,
+                                    String waveRgb) {
+        return advancedViewSmali(opts, urlViewListener, dismissListener, blinkListener, fontAssets,
+                waveRgb, null, null);
     }
 
     static String advancedViewSmali(DialogOptions opts, String urlViewListener, String dismissListener,
-                                      String blinkListener, Map<String, String> fontAssets,
-                                      String waveRgb, String videoHelper) {
+                                    String blinkListener, Map<String, String> fontAssets,
+                                    String waveRgb, String videoHelper,
+                                    SmaliStudioInjector.Plan plan) {
         StringBuilder sb = new StringBuilder();
         sb.append("    new-instance v6, Landroid/widget/FrameLayout;\n");
         sb.append("    invoke-direct {v6, p0}, Landroid/widget/FrameLayout;-><init>(Landroid/content/Context;)V\n");
@@ -956,6 +1107,32 @@ public class OverlayInjectorUtil {
                     sb.append("    const/4 v3, 0x1\n");
                     sb.append("    invoke-virtual {v2, v3}, Landroid/widget/ImageView;->setAdjustViewBounds(Z)V\n");
                     sb.append("    invoke-virtual {v2, v1}, Landroid/widget/ImageView;->setImageBitmap(Landroid/graphics/Bitmap;)V\n");
+                    appendRegistryPut(sb, plan, w, 2);
+                    appendChildSmali(sb, w, 2);
+                } else if (w.kind.equals("title") || w.kind.equals("message")) {
+                    boolean isTitle = w.kind.equals("title");
+                    String text = w.text == null ? "" : w.text;
+                    sb.append(loadTextSmali(text, opts.base64, opts.html, 1, 2));
+                    sb.append("    move-object v3, v1\n");
+                    sb.append("    new-instance v2, Landroid/widget/TextView;\n");
+                    sb.append("    invoke-direct {v2, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V\n");
+                    sb.append("    invoke-virtual {v2, v3}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V\n");
+                    if (w.textColor != 0) {
+                        sb.append("    const v1, 0x").append(Integer.toHexString(w.textColor)).append("\n");
+                        sb.append("    invoke-virtual {v2, v1}, Landroid/widget/TextView;->setTextColor(I)V\n");
+                    }
+                    if (w.textSizeSp > 0) {
+                        sb.append("    const/4 v1, 0x2\n");
+                        sb.append("    const v3, 0x").append(Integer.toHexString(Float.floatToRawIntBits(w.textSizeSp))).append("\n");
+                        sb.append("    invoke-virtual {v2, v1, v3}, Landroid/widget/TextView;->setTextSize(IF)V\n");
+                    }
+                    if (isTitle && (w.fontStyle & 1) != 0) {
+                        sb.append("    const/4 v1, 0x0\n");
+                        sb.append("    const/4 v3, 0x1\n");
+                        sb.append("    invoke-virtual {v2, v1, v3}, Landroid/widget/TextView;->setTypeface(Landroid/graphics/Typeface;I)V\n");
+                    }
+                    sb.append(widgetTypefaceSmali(w, opts, label++, fontAssets));
+                    appendRegistryPut(sb, plan, w, 2);
                     appendChildSmali(sb, w, 2);
                 } else if (w.kind.equals("button")) {
                     String text = w.text == null ? "" : w.text;
@@ -975,17 +1152,150 @@ public class OverlayInjectorUtil {
                     }
                     sb.append(widgetTypefaceSmali(w, opts, label++, fontAssets));
                     sb.append(buttonDecorSmali(w, opts, blinkListener, waveRgb, label++));
-                    if (w.url != null && !w.url.trim().isEmpty() && urlViewListener != null) {
-                        sb.append("    new-instance v3, ").append(urlViewListener).append("\n");
-                        sb.append("    const-string v1, \"").append(escapeSmali(w.url.trim())).append("\"\n");
-                        sb.append("    invoke-direct {v3, p0, v1}, ").append(urlViewListener).append("-><init>(Landroid/content/Context;Ljava/lang/String;)V\n");
-                    } else if (dismissListener != null) {
-                        sb.append("    new-instance v3, ").append(dismissListener).append("\n");
-                        sb.append("    invoke-direct {v3}, ").append(dismissListener).append("-><init>()V\n");
-                    } else {
-                        sb.append("    const/4 v3, 0x0\n");
+                    appendViewListener(sb, plan, w, 2, urlViewListener, dismissListener, false);
+                    appendViewListener(sb, plan, w, 2, urlViewListener, dismissListener, true);
+                    appendRegistryPut(sb, plan, w, 2);
+                    appendChildSmali(sb, w, 2);
+                } else if (w.kind.equals("input")) {
+                    sb.append("    new-instance v2, Landroid/widget/EditText;\n");
+                    sb.append("    invoke-direct {v2, p0}, Landroid/widget/EditText;-><init>(Landroid/content/Context;)V\n");
+                    if (w.hint != null && !w.hint.isEmpty()) {
+                        sb.append("    const-string v1, \"").append(escapeSmali(w.hint)).append("\"\n");
+                        sb.append("    invoke-virtual {v2, v1}, Landroid/widget/EditText;->setHint(Ljava/lang/CharSequence;)V\n");
                     }
-                    sb.append("    invoke-virtual {v2, v3}, Landroid/widget/Button;->setOnClickListener(Landroid/view/View$OnClickListener;)V\n");
+                    if (w.text != null && !w.text.isEmpty()) {
+                        sb.append("    const-string v1, \"").append(escapeSmali(w.text)).append("\"\n");
+                        sb.append("    invoke-virtual {v2, v1}, Landroid/widget/EditText;->setText(Ljava/lang/CharSequence;)V\n");
+                    }
+                    if (w.textColor != 0) {
+                        sb.append("    const v1, 0x").append(Integer.toHexString(w.textColor)).append("\n");
+                        sb.append("    invoke-virtual {v2, v1}, Landroid/widget/EditText;->setTextColor(I)V\n");
+                    }
+                    if (w.textSizeSp > 0) {
+                        sb.append("    const/4 v1, 0x2\n");
+                        sb.append("    const v3, 0x").append(Integer.toHexString(Float.floatToRawIntBits(w.textSizeSp))).append("\n");
+                        sb.append("    invoke-virtual {v2, v1, v3}, Landroid/widget/EditText;->setTextSize(IF)V\n");
+                    }
+                    sb.append(widgetTypefaceSmali(w, opts, label++, fontAssets));
+                    appendRegistryPut(sb, plan, w, 2);
+                    appendChildSmali(sb, w, 2);
+                    String watcher = plan == null ? null : plan.watcher(w.id);
+                    if (watcher != null) {
+                        sb.append("    new-instance v3, ").append(watcher).append("\n");
+                        sb.append("    invoke-direct {v3, p0}, ").append(watcher).append("-><init>(Landroid/content/Context;)V\n");
+                        sb.append("    invoke-virtual {v2, v3}, Landroid/widget/EditText;->addTextChangedListener(Landroid/text/TextWatcher;)V\n");
+                    }
+                } else if (w.kind.equals("checkbox")) {
+                    sb.append("    new-instance v2, Landroid/widget/CheckBox;\n");
+                    sb.append("    invoke-direct {v2, p0}, Landroid/widget/CheckBox;-><init>(Landroid/content/Context;)V\n");
+                    sb.append("    const-string v1, \"").append(escapeSmali(w.text)).append("\"\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/widget/CheckBox;->setText(Ljava/lang/CharSequence;)V\n");
+                    sb.append("    const/4 v1, 0x").append(w.checked ? "1" : "0").append("\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/widget/CheckBox;->setChecked(Z)V\n");
+                    if (w.textColor != 0) {
+                        sb.append("    const v1, 0x").append(Integer.toHexString(w.textColor)).append("\n");
+                        sb.append("    invoke-virtual {v2, v1}, Landroid/widget/CheckBox;->setTextColor(I)V\n");
+                    }
+                    if (w.textSizeSp > 0) {
+                        sb.append("    const/4 v1, 0x2\n");
+                        sb.append("    const v3, 0x").append(Integer.toHexString(Float.floatToRawIntBits(w.textSizeSp))).append("\n");
+                        sb.append("    invoke-virtual {v2, v1, v3}, Landroid/widget/CheckBox;->setTextSize(IF)V\n");
+                    }
+                    sb.append(widgetTypefaceSmali(w, opts, label++, fontAssets));
+                    appendRegistryPut(sb, plan, w, 2);
+                    appendChildSmali(sb, w, 2);
+                } else if (w.kind.equals("divider")) {
+                    sb.append("    new-instance v2, Landroid/view/View;\n");
+                    sb.append("    invoke-direct {v2, p0}, Landroid/view/View;-><init>(Landroid/content/Context;)V\n");
+                    sb.append("    const v1, 0x").append(Integer.toHexString(w.textColor == 0 ? 0x33000000 : w.textColor)).append("\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/view/View;->setBackgroundColor(I)V\n");
+                    appendDpToPx(sb, Float.floatToRawIntBits(1f), 1, 3, 7);
+                    sb.append("    float-to-int v1, v1\n");
+                    sb.append("    const/4 v7, -0x1\n");
+                    sb.append("    new-instance v3, Landroid/widget/FrameLayout$LayoutParams;\n");
+                    sb.append("    invoke-direct {v3, v7, v1}, Landroid/widget/FrameLayout$LayoutParams;-><init>(II)V\n");
+                    sb.append("    invoke-virtual {v6, v2, v3}, Landroid/widget/FrameLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V\n");
+                    appendRegistryPut(sb, plan, w, 2);
+                } else if (w.kind.equals("toggle")) {
+                    sb.append("    new-instance v2, Landroid/widget/Switch;\n");
+                    sb.append("    invoke-direct {v2, p0}, Landroid/widget/Switch;-><init>(Landroid/content/Context;)V\n");
+                    sb.append("    const-string v1, \"").append(escapeSmali(w.text == null ? "" : w.text)).append("\"\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/widget/Switch;->setText(Ljava/lang/CharSequence;)V\n");
+                    sb.append("    const/4 v1, 0x").append(w.checked ? "1" : "0").append("\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/widget/Switch;->setChecked(Z)V\n");
+                    if (w.textColor != 0) {
+                        sb.append("    const v1, 0x").append(Integer.toHexString(w.textColor)).append("\n");
+                        sb.append("    invoke-virtual {v2, v1}, Landroid/widget/Switch;->setTextColor(I)V\n");
+                    }
+                    if (w.textSizeSp > 0) {
+                        sb.append("    const/4 v1, 0x2\n");
+                        sb.append("    const v3, 0x").append(Integer.toHexString(Float.floatToRawIntBits(w.textSizeSp))).append("\n");
+                        sb.append("    invoke-virtual {v2, v1, v3}, Landroid/widget/Switch;->setTextSize(IF)V\n");
+                    }
+                    sb.append(widgetTypefaceSmali(w, opts, label++, fontAssets));
+                    appendViewListener(sb, plan, w, 2, urlViewListener, dismissListener, false);
+                    appendViewListener(sb, plan, w, 2, urlViewListener, dismissListener, true);
+                    appendRegistryPut(sb, plan, w, 2);
+                    appendChildSmali(sb, w, 2);
+                } else if (w.kind.equals("progress")) {
+                    sb.append("    new-instance v2, Landroid/widget/ProgressBar;\n");
+                    sb.append("    invoke-direct {v2, p0}, Landroid/widget/ProgressBar;-><init>(Landroid/content/Context;)V\n");
+                    sb.append("    const/4 v1, 0x0\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/widget/ProgressBar;->setIndeterminate(Z)V\n");
+                    sb.append("    const/16 v1, 0x64\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/widget/ProgressBar;->setMax(I)V\n");
+                    sb.append("    const/16 v1, 0x40\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/widget/ProgressBar;->setProgress(I)V\n");
+                    appendRegistryPut(sb, plan, w, 2);
+                    appendChildSmali(sb, w, 2);
+                } else if (w.kind.equals("card")) {
+                    String cardText = w.text == null ? "" : w.text;
+                    sb.append(loadTextSmali(cardText, opts.base64, opts.html, 1, 2));
+                    sb.append("    move-object v3, v1\n");
+                    sb.append("    new-instance v2, Landroid/widget/TextView;\n");
+                    sb.append("    invoke-direct {v2, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V\n");
+                    sb.append("    invoke-virtual {v2, v3}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V\n");
+                    if (w.textColor != 0) {
+                        sb.append("    const v1, 0x").append(Integer.toHexString(w.textColor)).append("\n");
+                        sb.append("    invoke-virtual {v2, v1}, Landroid/widget/TextView;->setTextColor(I)V\n");
+                    }
+                    if (w.textSizeSp > 0) {
+                        sb.append("    const/4 v1, 0x2\n");
+                        sb.append("    const v3, 0x").append(Integer.toHexString(Float.floatToRawIntBits(w.textSizeSp))).append("\n");
+                        sb.append("    invoke-virtual {v2, v1, v3}, Landroid/widget/TextView;->setTextSize(IF)V\n");
+                    }
+                    appendDpToPx(sb, Float.floatToRawIntBits(18f), 7, 4, 3);
+                    sb.append("    new-instance v1, Landroid/graphics/drawable/GradientDrawable;\n");
+                    sb.append("    invoke-direct {v1}, Landroid/graphics/drawable/GradientDrawable;-><init>()V\n");
+                    sb.append("    const v3, 0x1F6750A4\n");
+                    sb.append("    invoke-virtual {v1, v3}, Landroid/graphics/drawable/GradientDrawable;->setColor(I)V\n");
+                    sb.append("    invoke-virtual {v1, v7}, Landroid/graphics/drawable/GradientDrawable;->setCornerRadius(F)V\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/widget/TextView;->setBackground(Landroid/graphics/drawable/Drawable;)V\n");
+                    appendDpToPx(sb, Float.floatToRawIntBits(12f), 7, 4, 3);
+                    sb.append("    float-to-int v7, v7\n");
+                    appendDpToPx(sb, Float.floatToRawIntBits(10f), 4, 3, 1);
+                    sb.append("    float-to-int v4, v4\n");
+                    sb.append("    invoke-virtual {v2, v7, v4, v7, v4}, Landroid/widget/TextView;->setPadding(IIII)V\n");
+                    sb.append(widgetTypefaceSmali(w, opts, label++, fontAssets));
+                    appendViewListener(sb, plan, w, 2, urlViewListener, dismissListener, false);
+                    appendRegistryPut(sb, plan, w, 2);
+                    appendChildSmali(sb, w, 2);
+                } else if (w.kind.equals("spinner")) {
+                    sb.append("    new-instance v2, Landroid/widget/Spinner;\n");
+                    sb.append("    invoke-direct {v2, p0}, Landroid/widget/Spinner;-><init>(Landroid/content/Context;)V\n");
+                    int count = w.options == null ? 0 : w.options.size();
+                    sb.append("    const/4 v1, 0x").append(Integer.toHexString(count)).append("\n");
+                    sb.append("    new-array v3, v1, [Ljava/lang/Object;\n");
+                    for (int oi = 0; oi < count; oi++) {
+                        sb.append("    const/4 v1, 0x").append(Integer.toHexString(oi)).append("\n");
+                        sb.append("    const-string v7, \"").append(escapeSmali(w.options.get(oi))).append("\"\n");
+                        sb.append("    aput-object v7, v3, v1\n");
+                    }
+                    sb.append("    new-instance v1, Landroid/widget/ArrayAdapter;\n");
+                    sb.append("    const v7, 0x1090008\n");
+                    sb.append("    invoke-direct {v1, p0, v7, v3}, Landroid/widget/ArrayAdapter;-><init>(Landroid/content/Context;I[Ljava/lang/Object;)V\n");
+                    sb.append("    invoke-virtual {v2, v1}, Landroid/widget/Spinner;->setAdapter(Landroid/widget/SpinnerAdapter;)V\n");
+                    appendRegistryPut(sb, plan, w, 2);
                     appendChildSmali(sb, w, 2);
                 } else {
                     String text = w.text == null ? "" : w.text;
@@ -1003,6 +1313,7 @@ public class OverlayInjectorUtil {
                         sb.append("    invoke-virtual {v2, v1, v3}, Landroid/widget/TextView;->setTextSize(IF)V\n");
                     }
                     sb.append(widgetTypefaceSmali(w, opts, label++, fontAssets));
+                    appendRegistryPut(sb, plan, w, 2);
                     appendChildSmali(sb, w, 2);
                 }
             }
@@ -1010,6 +1321,42 @@ public class OverlayInjectorUtil {
         sb.append("    invoke-virtual {v0, v6}, Landroid/app/AlertDialog$Builder;->setView(Landroid/view/View;)Landroid/app/AlertDialog$Builder;\n");
         sb.append("    move-result-object v0\n");
         return sb.toString();
+    }
+
+    private static void appendRegistryPut(StringBuilder sb, SmaliStudioInjector.Plan plan,
+                                          AdvWidget w, int viewReg) {
+        if (plan == null || w == null || w.id == null || w.id.isEmpty()) return;
+        sb.append("    const-string v1, \"").append(escapeSmali(w.id)).append("\"\n");
+        sb.append("    invoke-static {v1, v").append(viewReg).append("}, ").append(plan.registryType)
+                .append("->put(Ljava/lang/String;Landroid/view/View;)V\n");
+    }
+
+    private static void appendViewListener(StringBuilder sb, SmaliStudioInjector.Plan plan,
+                                           AdvWidget w, int viewReg, String urlViewListener,
+                                           String dismissListener, boolean longClick) {
+        String type = null;
+        if (plan != null && w != null) {
+            type = plan.listener(w.id, longClick ? "LONG_CLICK" : "CLICK");
+            if (!longClick && type == null) type = plan.listener(w.id, "DOUBLE_CLICK");
+        }
+        if (type != null) {
+            sb.append("    new-instance v3, ").append(type).append("\n");
+            sb.append("    invoke-direct {v3, p0}, ").append(type).append("-><init>(Landroid/content/Context;)V\n");
+        } else if (longClick) {
+            return;
+        } else if (w != null && w.url != null && !w.url.trim().isEmpty() && urlViewListener != null) {
+            sb.append("    new-instance v3, ").append(urlViewListener).append("\n");
+            sb.append("    const-string v1, \"").append(escapeSmali(w.url.trim())).append("\"\n");
+            sb.append("    invoke-direct {v3, p0, v1}, ").append(urlViewListener).append("-><init>(Landroid/content/Context;Ljava/lang/String;)V\n");
+        } else if (dismissListener != null) {
+            sb.append("    new-instance v3, ").append(dismissListener).append("\n");
+            sb.append("    invoke-direct {v3}, ").append(dismissListener).append("-><init>()V\n");
+        } else {
+            sb.append("    const/4 v3, 0x0\n");
+        }
+        sb.append("    invoke-virtual {v").append(viewReg).append(", v3}, Landroid/view/View;->")
+                .append(longClick ? "setOnLongClickListener" : "setOnClickListener")
+                .append("(Landroid/view/View$").append(longClick ? "OnLongClickListener" : "OnClickListener").append(";)V\n");
     }
 
     private static String effectiveFont(AdvWidget w, DialogOptions opts) {
@@ -1173,6 +1520,25 @@ public class OverlayInjectorUtil {
             sb.append("    float-to-int v7, v7\n");
             sb.append("    iput v7, v3, Landroid/view/ViewGroup$MarginLayoutParams;->topMargin:I\n");
         }
+        if (w.widthPercent >= 100) {
+            sb.append("    const/4 v1, -0x1\n");
+            sb.append("    iput v1, v3, Landroid/view/ViewGroup$LayoutParams;->width:I\n");
+        } else if (w.widthDp > 0) {
+            sb.append("    const/4 v1, 0x1\n");
+            sb.append("    const v7, 0x").append(Integer.toHexString(Float.floatToRawIntBits((float) w.widthDp))).append("\n");
+            sb.append("    invoke-static {v1, v7, v5}, Landroid/util/TypedValue;->applyDimension(IFLandroid/util/DisplayMetrics;)F\n");
+            sb.append("    move-result v7\n");
+            sb.append("    float-to-int v7, v7\n");
+            sb.append("    iput v7, v3, Landroid/view/ViewGroup$LayoutParams;->width:I\n");
+        }
+        if (w.heightDp > 0) {
+            sb.append("    const/4 v1, 0x1\n");
+            sb.append("    const v7, 0x").append(Integer.toHexString(Float.floatToRawIntBits((float) w.heightDp))).append("\n");
+            sb.append("    invoke-static {v1, v7, v5}, Landroid/util/TypedValue;->applyDimension(IFLandroid/util/DisplayMetrics;)F\n");
+            sb.append("    move-result v7\n");
+            sb.append("    float-to-int v7, v7\n");
+            sb.append("    iput v7, v3, Landroid/view/ViewGroup$LayoutParams;->height:I\n");
+        }
         sb.append("    invoke-virtual {v6, v").append(viewReg).append(", v3}, Landroid/widget/FrameLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V\n");
     }
 
@@ -1221,14 +1587,24 @@ public class OverlayInjectorUtil {
     }
 
     static String wrapperSmali(String classDescriptor, String flags, boolean callToast, boolean callDialog) {
+        return wrapperSmali(classDescriptor, flags, callToast, callDialog, null);
+    }
+
+    static String wrapperSmali(String classDescriptor, String flags, boolean callToast,
+                               boolean callDialog, SmaliStudioInjector.Plan plan) {
+        boolean delay = plan != null && plan.delayMs > 0;
         StringBuilder sb = new StringBuilder();
         sb.append(".method ").append(flags).append(" onCreate(Landroid/os/Bundle;)V\n");
-        sb.append("    .locals 1\n");
+        sb.append("    .locals ").append(delay ? 4 : 1).append("\n");
         if (callToast) {
             sb.append("    invoke-direct {p0}, ").append(classDescriptor).append("->").append(TOAST_HELPER).append("()V\n");
         }
         if (callDialog) {
-            sb.append("    invoke-direct {p0}, ").append(classDescriptor).append("->").append(DIALOG_HELPER).append("()V\n");
+            if (plan != null && (plan.hasGuard || delay)) {
+                sb.append(SmaliStudioInjector.wrapperCall(plan, classDescriptor));
+            } else {
+                sb.append("    invoke-direct {p0}, ").append(classDescriptor).append("->").append(DIALOG_HELPER).append("()V\n");
+            }
         }
         sb.append("    invoke-direct {p0, p1}, ").append(classDescriptor).append("->onCreate$mpmanager(Landroid/os/Bundle;)V\n");
         sb.append("    return-void\n");
@@ -1813,10 +2189,32 @@ public class OverlayInjectorUtil {
                             videoViewSmali(classDescriptor.substring(0, classDescriptor.length() - 1) + "$mpVideo;"),
                             logger, patchedFiles);
                 }
-                insert.append(dialogHelperSmali(classDescriptor, dialog, urlListener, urlViewListener, noshowListener, blinkListener, dismissListener, fontAssets, waveRgb, dragListener, videoHelper)).append("\n");
+                SmaliStudioInjector.Plan plan = dialog.studio == null ? null
+                        : SmaliStudioInjector.build(classDescriptor, dialog.studio);
+                dialog.studioPlan = plan;
+                if (plan != null) {
+                    for (String cls : plan.classes) {
+                        int nl = cls.indexOf('\n');
+                        String header = nl < 0 ? cls : cls.substring(0, nl);
+                        String[] parts = header.split(" ");
+                        String type = parts[parts.length - 1];
+                        int dollar = type.lastIndexOf('$');
+                        int semi = type.lastIndexOf(';');
+                        String suffix = dollar >= 0 && semi > dollar ? type.substring(dollar, semi) : "$mpS";
+                        File helper = new File(smaliFile.getParentFile(),
+                                smaliFile.getName().replace(".smali", suffix + ".smali"));
+                        writeFile(helper, cls);
+                        patchedFiles.add(helper);
+                        if (logger != null) logger.logMessage(context.getString(R.string.logger_generated, type));
+                    }
+                    if (plan.hasGuard || plan.delayMs > 0) {
+                        insert.append(SmaliStudioInjector.trampolineSmali(classDescriptor, plan)).append("\n");
+                    }
+                }
+                insert.append(dialogHelperSmali(classDescriptor, dialog, urlListener, urlViewListener, noshowListener, blinkListener, dismissListener, fontAssets, waveRgb, dragListener, videoHelper, plan)).append("\n");
             }
             insert.append(wrapperSmali(classDescriptor, flags.isEmpty() ? "protected" : flags,
-                    toast != null, dialog != null));
+                    toast != null, dialog != null, dialog == null ? null : dialog.studioPlan));
             String renamed = matcher.group(1) + "private onCreate$mpmanager(Landroid/os/Bundle;)V";
             String patched = matcher.replaceFirst(Matcher.quoteReplacement( renamed));
             if (!patched.endsWith("\n")) patched += "\n";

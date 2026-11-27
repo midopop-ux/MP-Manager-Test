@@ -1467,6 +1467,7 @@
     <string name="clone_apk">استنساخ APK</string>
     <string name="add_toast_dialog">إضافة إشعار Toast / مربع حوار</string>
     <string name="remove_all_toasts">إزالة كافة إشعارات Toasts</string>
+    <string name="remove_injection">إزالة الحقن</string>
     <string name="remove_signature">إزالة التوقيع</string>
     <string name="signature_health">صحة التوقيع</string>
     <string name="manifest_toggles">مفاتيح تبديل Manifest</string>
@@ -2601,4 +2602,11 @@
 <string name="image_options_message">نوع الصورة: %1$s%2$s\n\nهل ترغب في استعراض وتصفح محتويات النظام، أو فتحها بتطبيق خارجي؟</string>
 <string name="image_explorer_title">استعراض صورة النظام</string>
 <string name="image_browse_files">استعراض وتصفح</string>
+
+    <string name="ai_chat_title">مساعد التطبيقات الذكي</string>
+    <string name="ai_chat_subtitle">محادثة متعددة المزودين لتحليل APK والكود وتصميم الدايلوك</string>
+    <string name="apk_clone_title">استوديو استنساخ التطبيقات</string>
+    <string name="apk_clone_subtitle">استنساخ APK أو التطبيقات المثبتة مع الاسم والأيقونة والتوقيع والدفعات</string>
+    <string name="file_crypto_title">فك التشفير وتحليل الملفات</string>
+    <string name="file_crypto_subtitle">كشف الترميز والضغط والتشفير مع المعاينة والمفاتيح والدفعات</string>
 </resources>

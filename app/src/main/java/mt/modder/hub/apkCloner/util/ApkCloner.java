@@ -105,18 +105,33 @@ public class ApkCloner {
 		OldPackageName = oldpkg;
 		newPackageName = newPkg;
 		outApk = input.replace(".apk", "_clone.apk"); // Output APK with "_dp" suffix
-		tempApk = new File(srcApk).getParentFile().toString() + "/.temp"; // Temporary directory path
-	}
+                tempApk = new File(srcApk).getParentFile().toString() + "/.temp_" + System.nanoTime();
+        }
+
+        public void setOutputFile(String output) {
+                if (output != null && !output.trim().isEmpty()) outApk = output;
+        }
+
+        public String getOutputFile() {
+                return outApk;
+        }
 
 	// Main method to process the APK
 	public void processApk() throws Exception {
 		// Delete existing output APK file
 		new File(outApk).delete();
 
+		File outputParent = new File(outApk).getParentFile();
+		if (outputParent == null || !outputParent.canWrite()) {
+			outputParent = mContext.getCacheDir();
+		}
+		String tempApkPath = new File(outputParent,
+			".temp_" + System.nanoTime()).getAbsolutePath();
+
 		try (ZipFile zipFile = new ZipFile(srcApk)) { // Open source APK as a zip file
 			
 			// Prepare the temporary zip output stream
-			ZipOutputStream zipOutputStream = new ZipOutputStream(new File(tempApk));
+			ZipOutputStream zipOutputStream = new ZipOutputStream(new File(tempApkPath));
 			zipOutputStream.setLevel(1); // Set compression level
 			zipOutputStream.setMethod(ZipOutputStream.STORED); // Set storage method
 
@@ -189,9 +204,11 @@ public class ApkCloner {
 				}
 
 				// Clean up the temporary directory
-				new File(tempApk).delete();
+				new File(tempApkPath).delete();
 				zipFile.close();
 			} 
+		} finally {
+			new File(tempApkPath).delete();
 		}
 	}
 
@@ -229,7 +246,7 @@ public class ApkCloner {
         String axmlString = new aXMLDecoder(inputStream).decodeAsString(); //axmlPrinter.convertXml(readAllBytes(inputStream));
 
         // Replace package name
-        String replacedPackageString = axmlString.replaceFirst("package=\"" + oldPackageName + "\"", "package=\"" + newPackageName + "\"");
+        String replacedPackageString = axmlString.replaceFirst("package=\"" + Pattern.quote(oldPackageName) + "\"", "package=\"" + newPackageName + "\"");
 
         HashMap<String, String> permissionMap = new HashMap<>();
 
@@ -367,17 +384,20 @@ public class ApkCloner {
         // Find and modify relative class names
 		// This regex finds Android component tags (application, activity, service, receiver, activity-alias)
         // and extracts the relative class name (starting with a dot) specified in the android:name attribute.
-        Matcher relativeClassNameMatcher = Pattern.compile("<(?:application|activity|service|receiver|activity-alias)[^>]*?android:name=\"(\\..*?)\"").matcher(modifiedProvidersString);
-        StringBuilder relativeClassNameSB = new StringBuilder(modifiedProvidersString.length());
+        String modifiedPackageAttrs = rewritePackageAttributes(modifiedProvidersString,
+                oldPackageName, newPackageName, permissionMap);
+
+        Matcher relativeClassNameMatcher = Pattern.compile("<(?:application|activity|service|receiver|activity-alias)[^>]*?android:name=\"(\\..*?)\"").matcher(modifiedPackageAttrs);
+        StringBuilder relativeClassNameSB = new StringBuilder(modifiedPackageAttrs.length());
         int lastRelativeClassNameMatchEnd = 0;
 		while (relativeClassNameMatcher.find()) {
 			int relativeClassNameStart = relativeClassNameMatcher.start(1);
 
-			relativeClassNameSB.append(modifiedProvidersString.substring(lastRelativeClassNameMatchEnd, relativeClassNameStart));
+			relativeClassNameSB.append(modifiedPackageAttrs.substring(lastRelativeClassNameMatchEnd, relativeClassNameStart));
 			relativeClassNameSB.append(oldPackageName);
             lastRelativeClassNameMatchEnd = relativeClassNameStart;
         }
-        relativeClassNameSB.append(modifiedProvidersString.substring(lastRelativeClassNameMatchEnd));
+        relativeClassNameSB.append(modifiedPackageAttrs.substring(lastRelativeClassNameMatchEnd));
 		String modifiedRelativeClassNameString = relativeClassNameSB.toString();
 
 
@@ -399,6 +419,42 @@ public class ApkCloner {
         //return new AXMLCompiler().axml2Xml(context, activityAliasSB.toString());
     }
 	
+
+	private static String rewritePackageAttributes(String xml, String oldPackage,
+	                                               String newPackage,
+	                                               HashMap<String, String> permissionMap) {
+		String result = rewriteAttribute(xml, "android:permission", oldPackage,
+			newPackage, permissionMap, true);
+		result = rewriteAttribute(result, "android:taskAffinity", oldPackage,
+			newPackage, permissionMap, false);
+		result = rewriteAttribute(result, "android:process", oldPackage,
+			newPackage, permissionMap, false);
+		return result;
+	}
+
+	private static String rewriteAttribute(String xml, String attribute, String oldPackage,
+	                                       String newPackage,
+	                                       HashMap<String, String> permissionMap,
+	                                       boolean mapPermissions) {
+		Matcher matcher = Pattern.compile("(" + Pattern.quote(attribute) + "=\")([^\"]*)(\")")
+			.matcher(xml);
+		StringBuilder out = new StringBuilder(xml.length());
+		int last = 0;
+		while (matcher.find()) {
+			String value = matcher.group(2);
+			String replacement = value;
+			if (mapPermissions && permissionMap.containsKey(value)) {
+				replacement = permissionMap.get(value);
+			} else if (value.startsWith(oldPackage)) {
+				replacement = newPackage + value.substring(oldPackage.length());
+			}
+			out.append(xml, last, matcher.start(2));
+			out.append(replacement);
+			last = matcher.end(2);
+		}
+		out.append(xml.substring(last));
+		return out.toString();
+	}
 
 	// Callback interface for progress and messages
 	public interface ApkClonerCallBack {
