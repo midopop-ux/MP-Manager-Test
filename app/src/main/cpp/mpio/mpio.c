@@ -84,7 +84,10 @@ typedef struct {
 } ScanStats;
 
 static bool virtual_filesystem(const char *path) {
-    static const char *roots[] = {"/proc", "/sys", "/dev", "/acct", "/config", "/d", "/linkerconfig", "/data_mirror"};
+    static const char *roots[] = {
+        "/proc", "/sys", "/dev", "/acct", "/config", "/d", "/linkerconfig", "/data_mirror",
+        "/mnt/runtime", "/mnt/androidwritable", "/mnt/installer", "/mnt/pass_through", "/mnt/user"
+    };
     for (size_t i = 0; i < sizeof(roots) / sizeof(roots[0]); i++) {
         size_t len = strlen(roots[i]);
         if (strncmp(path, roots[i], len) == 0 && (path[len] == '\0' || path[len] == '/')) return true;
