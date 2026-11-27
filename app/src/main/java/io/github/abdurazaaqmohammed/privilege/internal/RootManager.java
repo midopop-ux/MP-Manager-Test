@@ -1469,8 +1469,9 @@ public class RootManager {
             }
 
             ShellResult commitResult = execute("pm install-commit " + sessionId);
-            if (!commitResult.isSuccess() || (!commitResult.output().contains("Success") && !commitResult.output().contains("Session"))) {
-                throw new IOException("Install failed: " + commitResult.error() + " " + commitResult.output());
+            String out = commitResult.output() != null ? commitResult.output() : "";
+            if (!commitResult.isSuccess() || (!out.contains("Success") && !out.contains("Session") && !out.contains("Completed with warning"))) {
+                throw new IOException("Install failed: " + commitResult.error() + " " + out);
             }
         } finally {
             cleanupInstallTag(tag, apkPaths.size());

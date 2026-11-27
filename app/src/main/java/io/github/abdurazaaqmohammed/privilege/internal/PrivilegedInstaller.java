@@ -420,7 +420,7 @@ public final class PrivilegedInstaller {
                     }
                 }
                 ShizukuShell.Result commit = ShizukuShell.exec("pm install-commit " + session, 120);
-                if (!commit.success || (!commit.stdout.contains("Success") && !commit.stdout.contains("Session")))
+                if (!commit.success || (!commit.stdout.contains("Success") && !commit.stdout.contains("Session") && !commit.stdout.contains("Completed with warning")))
                     throw new IllegalStateException("Shizuku install-commit failed: " + commit.stdout + " " + commit.stderr);
             } finally {
                 // Always clear /data/local/tmp, even when a write or commit failed.
