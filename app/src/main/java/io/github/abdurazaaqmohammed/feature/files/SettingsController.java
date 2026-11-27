@@ -1228,6 +1228,10 @@ public class SettingsController {
                     handler.post(() -> {
                         if (ok) {
                             WorkingModePrefs.set(activity, WorkingModePrefs.WorkingMode.ROOT);
+                            if (!settings.contains("root_file_ops")) {
+                                settings.edit().putBoolean("root_file_ops", true).apply();
+                                rootFileOpsToggle.setChecked(true);
+                            }
                         } else {
                             Extensions.showMessage(activity, R.string.root_denied_msg);
                             workingModeTv.setText(WorkingModePrefs.get(activity) == WorkingModePrefs.WorkingMode.SHIZUKU
