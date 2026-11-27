@@ -50,13 +50,10 @@ public final class AccessManager {
         RootManager rm = RootManager.getInstance(context);
         WorkingModePrefs.WorkingMode mode = rm.getWorkingMode();
         if (mode == WorkingModePrefs.WorkingMode.ROOT) {
-            if (rm.isRootAvailable() || !ShizukuManager.ready()) return Backend.ROOT;
-            return Build.VERSION.SDK_INT >= 23 ? Backend.SHIZUKU : Backend.NONE;
+            return rm.isRootAvailable() ? Backend.ROOT : Backend.NONE;
         }
-        if (rm.isRootAvailableCached()) return Backend.ROOT;
         if (mode == WorkingModePrefs.WorkingMode.SHIZUKU && Build.VERSION.SDK_INT >= 23) {
-            if (rm.isRootAvailable()) return Backend.ROOT;
-            return Backend.SHIZUKU;
+            return ShizukuManager.ready() ? Backend.SHIZUKU : Backend.NONE;
         }
         return Backend.NONE;
     }
@@ -110,10 +107,10 @@ public final class AccessManager {
         }
         Backend backend = active(context);
         try {
-            if (backend == Backend.ROOT || (context != null && RootManager.getInstance(context).isRootAvailable())) {
+            if (backend == Backend.ROOT) {
                 return RootManager.getInstance(context).exists(absPath);
             }
-            if (backend == Backend.SHIZUKU || ShizukuManager.ready()) {
+            if (backend == Backend.SHIZUKU) {
                 return ShizukuManager.exists(context, absPath);
             }
         } catch (Exception ignored) {
@@ -133,10 +130,10 @@ public final class AccessManager {
         if (absPath == null) return false;
         Backend backend = active(context);
         try {
-            if (backend == Backend.ROOT || (context != null && RootManager.getInstance(context).isRootAvailable())) {
+            if (backend == Backend.ROOT) {
                 return RootManager.getInstance(context).exists(absPath);
             }
-            if (backend == Backend.SHIZUKU || ShizukuManager.ready()) {
+            if (backend == Backend.SHIZUKU) {
                 return ShizukuManager.exists(context, absPath);
             }
         } catch (Exception ignored) {
@@ -153,10 +150,10 @@ public final class AccessManager {
         }
         Backend backend = active(context);
         try {
-            if (backend == Backend.ROOT || (context != null && RootManager.getInstance(context).isRootAvailable())) {
+            if (backend == Backend.ROOT) {
                 return RootManager.getInstance(context).isDirectory(absPath);
             }
-            if (backend == Backend.SHIZUKU || ShizukuManager.ready()) {
+            if (backend == Backend.SHIZUKU) {
                 return ShizukuManager.isDirectory(context, absPath);
             }
         } catch (Exception ignored) {
@@ -173,8 +170,11 @@ public final class AccessManager {
         }
         Backend backend = active(context);
         try {
-            if (backend == Backend.ROOT || (context != null && RootManager.getInstance(context).isRootAvailable())) {
+            if (backend == Backend.ROOT) {
                 return RootManager.getInstance(context).isFile(absPath);
+            }
+            if (backend == Backend.SHIZUKU) {
+                return ShizukuManager.isFile(context, absPath);
             }
         } catch (Exception ignored) {
         }
@@ -182,26 +182,22 @@ public final class AccessManager {
     }
 
     public static File[] listWithStat(Context context, String dirPath) {
-        boolean rootAvail = context != null && RootManager.getInstance(context).isRootAvailable();
-        // Root (mpio serve) takes strict priority over Shizuku everywhere,
-        // including /Android/data and /Android/obb, whenever root is present.
-        if (rootAvail) {
-            File[] viaRoot = RootManager.getInstance(context).listRootFilesWithStat(dirPath);
-            if (viaRoot != null) return viaRoot;
-        }
         Backend backend = active(context);
-        if (backend == Backend.SHIZUKU || (!rootAvail && ShizukuManager.ready())) {
+        if (backend == Backend.ROOT) {
+            return RootManager.getInstance(context).listRootFilesWithStat(dirPath);
+        }
+        if (backend == Backend.SHIZUKU) {
             return ShizukuManager.listWithStat(context, dirPath);
         }
         return null;
     }
 
     public static long getSize(Context context, String absPath) {
-        if (context != null && RootManager.getInstance(context).isRootAvailable()) {
+        Backend backend = active(context);
+        if (backend == Backend.ROOT) {
             return RootManager.getInstance(context).getFileSize(absPath);
         }
-        Backend backend = active(context);
-        if (backend == Backend.SHIZUKU || ShizukuManager.ready()) {
+        if (backend == Backend.SHIZUKU) {
             return ShizukuManager.getFileSize(context, absPath);
         }
         try {
@@ -212,12 +208,12 @@ public final class AccessManager {
     }
 
     public static long getMtime(Context context, String absPath) {
-        if (context != null && RootManager.getInstance(context).isRootAvailable()) {
+        Backend backend = active(context);
+        if (backend == Backend.ROOT) {
             RootManager.RootEntry e = RootManager.getInstance(context).statEntry(absPath);
             return e != null ? e.lastModified() : 0;
         }
-        Backend backend = active(context);
-        if (backend == Backend.SHIZUKU || ShizukuManager.ready()) {
+        if (backend == Backend.SHIZUKU) {
             return ShizukuManager.getMtime(context, absPath);
         }
         try {

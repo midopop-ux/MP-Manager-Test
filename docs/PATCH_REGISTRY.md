@@ -25,5 +25,6 @@
   1. `AccessManager.smali` & `RootManager.smali` (`6de3bae6` — strict `WorkingMode` enforcement + live `resetServe()`)
   2. `ApkOverlayTools.smali` (`f03ce43e` — compact `B`/`I`/`U`/`Color` & `Save`/`Delete` profile buttons)
   3. `CompareDexActivity.smali` + `classes5.dex` (`e71ac0ea` — parallel `.mtcr` export helper)
+  4. `MainActivity.smali` (`listPlainFolder` — isolate Root to `Backend.ROOT`, direct Shizuku listing for `Backend.SHIZUKU`, isolate `Backend.NONE`)
 
 
