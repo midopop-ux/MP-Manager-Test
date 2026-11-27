@@ -375,6 +375,7 @@ public class ApkInstallDialogHelper {
         String baseMsg = activity.getString(R.string.installed_successfully, appName);
 
         CharSequence message;
+        final boolean[] longPressed = {false};
         if (hasWarning) {
             String suffix = activity.getString(R.string.with_warning_suffix);
             String word = activity.getString(R.string.warning_word);
@@ -386,6 +387,10 @@ public class ApkInstallDialogHelper {
                 ssb.setSpan(new ClickableSpan() {
                     @Override
                     public void onClick(View widget) {
+                        if (longPressed[0]) {
+                            longPressed[0] = false;
+                            return;
+                        }
                         new ErrorUtil(activity).showError(warning);
                     }
 
@@ -422,6 +427,7 @@ public class ApkInstallDialogHelper {
                 if (msgView != null) {
                     msgView.setMovementMethod(LinkMovementMethod.getInstance());
                     msgView.setOnLongClickListener(v -> {
+                        longPressed[0] = true;
                         ClipboardManager cm = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
                         if (cm != null) {
                             cm.setPrimaryClip(ClipData.newPlainText("install_warning", warning));
