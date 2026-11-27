@@ -168,7 +168,7 @@ public final class CustomSyntaxManager {
             if (scopeName.equals(info.scopeName) && info.file.isFile()) {
                 try {
                     IGrammarSource source = IGrammarSource.fromFile(info.file);
-                    DefaultGrammarDefinition def = DefaultGrammarDefinition.withGrammarSource(source, info.name, info.scopeName);
+                    DefaultGrammarDefinition def = DefaultGrammarDefinition.withGrammarSource(source, info.displayName, info.scopeName);
                     return registry == null
                             ? TextMateLanguage.create(def, true)
                             : TextMateLanguage.create(def, GrammarRegistry.getInstance(), registry, true);

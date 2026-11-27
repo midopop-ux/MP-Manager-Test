@@ -2676,4 +2676,15 @@ The stub application is replaced with the real one found in the dump and all inj
     <string name="use_3d_icons_summary">Use adaptive 3D artwork for file and folder icons</string>
     <string name="with_warning_suffix">\u0020with warning</string>
     <string name="warning_word">warning</string>
+
+    <!-- DEX Browser -->
+    <string name="dex_browser">DEX Browser</string>
+    <string name="dex_browser_search_hint">Search class or package name…</string>
+    <string name="dex_browser_no_classes">No classes found</string>
+    <string name="dex_browser_detail_error">Failed to load class details.</string>
+    <string name="dex_browser_analyzing">Analyzing %1$s (%2$d/%3$d)…</string>
+    <string name="dex_browser_results">%1$s · Results: %2$d</string>
+    <string name="dex_browser_copy_name">Copy class name</string>
+    <string name="dex_browser_copied">Copied to clipboard.</string>
+    <string name="dex_browser_no_file">No file specified.</string>
 </resources>
