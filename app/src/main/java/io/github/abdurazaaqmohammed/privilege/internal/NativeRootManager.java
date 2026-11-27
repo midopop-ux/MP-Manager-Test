@@ -266,6 +266,12 @@ public final class NativeRootManager {
      */
     public static BatchSizeResult measureSizesBatch(Context context, List<String> paths,
                                                     long perItemMs, long totalTimeoutMs) {
+        return measureSizesBatch(context, paths, perItemMs, totalTimeoutMs, null);
+    }
+
+    public static BatchSizeResult measureSizesBatch(Context context, List<String> paths,
+                                                    long perItemMs, long totalTimeoutMs,
+                                                    java.util.function.BiConsumer<String, Long> onItemReady) {
         Map<String, Long> sizes = new HashMap<>();
         List<String> timedOut = new ArrayList<>();
         List<String> failed = new ArrayList<>();
@@ -280,7 +286,12 @@ public final class NativeRootManager {
         MpioServeClient client = getSizeServeClient(context);
         if (client != null && !client.isUnsupported()) {
             Map<String, MpioServeClient.ServeDirStats> fast =
-                    client.dirSizesBatch(paths, rm.prefersGlobalNs(), perItemMs, totalTimeoutMs);
+                    client.dirSizesBatch(paths, rm.prefersGlobalNs(), perItemMs, totalTimeoutMs,
+                            onItemReady == null ? null : (path, item) -> {
+                                if (item != null && !item.timedOut() && item.isCompleteMeasure()) {
+                                    onItemReady.accept(path, item.bytes());
+                                }
+                            });
             if (fast != null) {
                 for (String p : paths) {
                     MpioServeClient.ServeDirStats item = fast.get(p);

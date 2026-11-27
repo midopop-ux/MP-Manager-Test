@@ -555,7 +555,14 @@ public final class PrivilegeManager {
         }
 
         public static BatchResult measureSizesBatch(Context context, List<String> paths, long perItemMs, long totalTimeoutMs) {
-            NativeRootManager.BatchSizeResult r = NativeRootManager.measureSizesBatch(context, paths, perItemMs, totalTimeoutMs);
+            return measureSizesBatch(context, paths, perItemMs, totalTimeoutMs, null);
+        }
+
+        public static BatchResult measureSizesBatch(Context context, List<String> paths,
+                                                    long perItemMs, long totalTimeoutMs,
+                                                    java.util.function.BiConsumer<String, Long> onItemReady) {
+            NativeRootManager.BatchSizeResult r =
+                    NativeRootManager.measureSizesBatch(context, paths, perItemMs, totalTimeoutMs, onItemReady);
             return new BatchResult(r.sizes(), r.timedOut(), r.failed());
         }
 

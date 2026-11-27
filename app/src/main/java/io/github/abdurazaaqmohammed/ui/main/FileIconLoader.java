@@ -1084,10 +1084,15 @@ public class FileIconLoader {
             }
             if (rootAvail) {
                 PrivilegeManager.Native.BatchResult batch =
-                        PrivilegeManager.Native.measureSizesBatch(context, claimedPaths, 1200L, 3500L);
+                        PrivilegeManager.Native.measureSizesBatch(context, claimedPaths, 800L, 4500L,
+                                (path, bytes) -> {
+                                    DirSizeCache.record(new File(path), bytes);
+                                    if (!cancelled) {
+                                        postApplyFolderSizes(java.util.Collections.singletonMap(path, bytes));
+                                    }
+                                });
                 if (!batch.sizes().isEmpty()) {
-                    DirSizeCache.recordBatch(batch.sizes());
-                    postApplyFolderSizes(batch.sizes());
+                    DirSizeCache.scheduleSave();
                 }
                 for (String t : batch.timedOut()) {
                     DirSizeCache.recordCooldown(t, DirSizeCache.COOLDOWN_TIMEOUT_MS);

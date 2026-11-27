@@ -957,12 +957,25 @@ static int measure_target_path(const char *raw_path, uint64_t timeout_ms,
         return -1;
     }
 
-    if (S_ISDIR(lst.st_mode)) {
+    bool target_is_dir = S_ISDIR(lst.st_mode);
+    bool target_is_link = S_ISLNK(lst.st_mode);
+    if (target_is_link) {
+        struct stat st;
+        if (stat(target, &st) == 0 && S_ISDIR(st.st_mode)) {
+            target_is_dir = true;
+        }
+    }
+
+    if (target_is_dir) {
         out_stats->dirs = 1;
         if (virtual_filesystem(clean_path) || virtual_filesystem(target)) {
             return 0;
         }
-        int root_fd = open(target, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        int open_flags = O_RDONLY | O_DIRECTORY | O_CLOEXEC;
+        if (!target_is_link) {
+            open_flags |= O_NOFOLLOW;
+        }
+        int root_fd = open(target, open_flags);
         if (root_fd < 0) {
             *out_errno = errno;
             return -1;

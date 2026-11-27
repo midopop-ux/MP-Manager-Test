@@ -183,6 +183,12 @@ final class MpioServeClient {
 
     java.util.Map<String, ServeDirStats> dirSizesBatch(List<String> paths, boolean globalNs,
                                                        long perItemMs, long totalTimeoutMs) {
+        return dirSizesBatch(paths, globalNs, perItemMs, totalTimeoutMs, null);
+    }
+
+    java.util.Map<String, ServeDirStats> dirSizesBatch(
+            List<String> paths, boolean globalNs, long perItemMs, long totalTimeoutMs,
+            java.util.function.BiConsumer<String, ServeDirStats> onItem) {
         if (unsupported || paths == null || paths.isEmpty()) {
             return null;
         }
@@ -212,7 +218,8 @@ final class MpioServeClient {
                 }, watchdogMs, TimeUnit.MILLISECONDS);
                 try {
                     sendBatchDirSizeLocked(valid, clampedPer, clampedTotal);
-                    java.util.Map<String, ServeDirStats> out = parseServeBatchDirStats(stdout, valid, tokenScratch);
+                    java.util.Map<String, ServeDirStats> out =
+                            parseServeBatchDirStats(stdout, valid, tokenScratch, onItem);
                     if (done.get()) {
                         closeLocked();
                         return null;
@@ -390,6 +397,13 @@ final class MpioServeClient {
     static Map<String, ServeDirStats> parseServeBatchDirStats(InputStream in, List<String> paths,
                                                               ByteArrayOutputStream scratch)
             throws IOException {
+        return parseServeBatchDirStats(in, paths, scratch, null);
+    }
+
+    static Map<String, ServeDirStats> parseServeBatchDirStats(
+            InputStream in, List<String> paths, ByteArrayOutputStream scratch,
+            java.util.function.BiConsumer<String, ServeDirStats> onItem)
+            throws IOException {
         Map<String, ServeDirStats> out = new HashMap<>(paths.size());
         for (;;) {
             String tag = readNulToken(in, scratch);
@@ -415,7 +429,12 @@ final class MpioServeClient {
             long hidden = Math.max(0L, parseLongSafe(parts[6], 0L));
             long errors = Math.max(0L, parseLongSafe(parts[7], 0L));
             if (idx >= 0 && idx < paths.size()) {
-                out.put(paths.get(idx), new ServeDirStats(timedOut, bytes, files, dirs, hidden, errors));
+                String path = paths.get(idx);
+                ServeDirStats item = new ServeDirStats(timedOut, bytes, files, dirs, hidden, errors);
+                out.put(path, item);
+                if (onItem != null) {
+                    onItem.accept(path, item);
+                }
             }
         }
     }
