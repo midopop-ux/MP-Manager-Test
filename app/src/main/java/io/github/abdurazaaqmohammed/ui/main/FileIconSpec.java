@@ -187,7 +187,7 @@ public record FileIconSpec(int glyph, int background, int foreground, int label)
         backgroundDrawable.setCornerRadius(6 * density);
         int tile = background;
         if (glyph == R.drawable.ic_folder_mt) {
-            tile = ThemeRegistry.packColor(context, "folder_icon_bg", tile);
+            tile = ThemeRegistry.packColor(context, "folder_icon_bg", 0xFF252525);
         } else if (glyph == R.drawable.baseline_insert_drive_file_24) {
             tile = ThemeRegistry.packColor(context, "file_icon_bg", tile);
         }

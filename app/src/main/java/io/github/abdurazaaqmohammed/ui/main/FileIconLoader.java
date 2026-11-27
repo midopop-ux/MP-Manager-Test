@@ -134,6 +134,7 @@ public class FileIconLoader {
     private static int cachedIconTheme = -1;
     private static int cachedIconEpoch = -1;
     private static boolean cachedIconDark;
+    private static boolean cachedIcon3d;
     private static int cachedIconBucket = -1;
 
     private final MainActivity context;
@@ -1794,11 +1795,14 @@ public class FileIconLoader {
         int bucket = (int) (density * 4);
         int epoch = ThemeRegistry.currentEpoch();
         boolean dark = ThemeRegistry.isDarkTheme(context);
+        boolean use3d = UiPrefs.use3dIcons(context);
         if (cachedIconTheme == theme && cachedIconEpoch == epoch
-                && cachedIconDark == dark && cachedIconBucket == bucket) return;
+                && cachedIconDark == dark && cachedIcon3d == use3d
+                && cachedIconBucket == bucket) return;
         cachedIconTheme = theme;
         cachedIconEpoch = epoch;
         cachedIconDark = dark;
+        cachedIcon3d = use3d;
         cachedIconBucket = bucket;
         cachedUpFolderIcon = FileIconSpec.parentDrawable(context);
         cachedFolderIcon = FileIconSpec.FOLDER.drawable(context);

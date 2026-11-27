@@ -40,6 +40,7 @@ public class PickerIconLoader {
     private static Drawable cachedUpFolderIcon, cachedFolderIcon, cachedApkIcon, cachedImageIcon, cachedVideoIcon,
             cachedMusicIcon, cachedArchiveIcon, cachedPdfIcon, cachedTextIcon, cachedFileIcon;
     private static boolean cachedNight;
+    private static boolean cached3d;
     private static int cachedEpoch = -1;
     private static int cachedBucket = -1;
 
@@ -146,15 +147,18 @@ public class PickerIconLoader {
     private static void ensureCachedIcons(Context context) {
         Resources res = context.getResources();
         boolean night = ThemeRegistry.isDarkTheme(context);
+        boolean use3d = io.github.abdurazaaqmohammed.data.prefs.UiPrefs.use3dIcons(context);
         int epoch = ThemeRegistry.currentEpoch();
         int bucket = (int) (res.getDisplayMetrics().density * 4);
-        if (cachedNight == night && cachedEpoch == epoch
+        if (cachedNight == night && cached3d == use3d && cachedEpoch == epoch
                 && cachedBucket == bucket && cachedFolderIcon != null) {
             return;
         }
         cachedNight = night;
+        cached3d = use3d;
         cachedEpoch = epoch;
         cachedBucket = bucket;
+        iconCache.evictAll();
         cachedUpFolderIcon = FileIconSpec.parentDrawable(context);
         cachedFolderIcon = FileIconSpec.FOLDER.drawable(context);
         cachedApkIcon = FileIconSpec.APK.drawable(context);
