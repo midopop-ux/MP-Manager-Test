@@ -21,6 +21,7 @@
 | `a6153a86` | `fix(installer): treat Android 15 'Completed with warning' pm install output as success` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`RootManager.smali`, `PrivilegedInstaller.smali`) |
 | `a48d54fb` | `fix(installer): check Completed with warning before exit code in pm install-commit` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`RootManager.smali`, `PrivilegedInstaller.smali`) |
 | `50ea64de` | `feat(installer): show red clickable 'warning' after installed successfully` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`RootManager`, `PrivilegedInstaller`, `ApkInstallDialogHelper` Smali) |
+| `f76eb9b3` | `fix(installer): prevent warning long-press copy from opening error dialog` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`WarningClickSpan`, `WarningLongClick` Smali) |
 
 ---
 
