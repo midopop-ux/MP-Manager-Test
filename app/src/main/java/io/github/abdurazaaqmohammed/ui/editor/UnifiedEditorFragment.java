@@ -740,7 +740,7 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
                 Language language = editorRegistry == null
                         ? TextMateLanguage.create("source.smali", GrammarRegistry.getInstance(), true)
                         : TextMateLanguage.create("source.smali", GrammarRegistry.getInstance(), editorRegistry, true);
-                editor.setEditorLanguage(new ColorPreviewLanguageWrapper(new CustomAutoComplete(editor, cachedInstructions, language), editor));
+                editor.setEditorLanguage(new ColorPreviewLanguageWrapper(new CustomAutoComplete(editor, cachedInstructions, language), editor).setHighlightSmaliMethods(true));
                 editor.setColorScheme(createEditorColorScheme(requireContext(), editorRegistry));
                 applyPackEditorColors();
                 recordAppliedThemeSignature();
