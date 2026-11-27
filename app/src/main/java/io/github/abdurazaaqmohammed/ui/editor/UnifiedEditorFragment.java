@@ -217,11 +217,11 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
     // a worker thread the first time highlighting is requested and then cached per scope.
     private static boolean syntaxGrammarsLoaded = false;
     private static final String[] SYNTAX_LABELS = {
-            "Plain Text", "XML", "AXML", "Java", "C", "C++", "Python", "JavaScript",
+            "Plain Text", "Smali", "XML", "AXML", "Java", "C", "C++", "Python", "JavaScript",
             "HTML", "CSS", "Markdown", "JSON", "Rust", "Shell", "Prop"
     };
     private static final String[] SYNTAX_SCOPES = {
-            null, "text.xml", "text.xml", "source.java", "source.c", "source.cpp", "source.python",
+            null, "source.smali", "text.xml", "text.xml", "source.java", "source.c", "source.cpp", "source.python",
             "source.js", "text.html.basic", "source.css", "text.html.markdown", "source.json",
             "source.rust", "source.shell", "source.prop"
     };
@@ -1624,6 +1624,9 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
 
     private int currentSyntaxIndex(String[] scopes) {
         String scope = syntaxPolicy.requestedScope();
+        if (scope == null && isSmali) {
+            scope = "source.smali";
+        }
         if (scope != null) {
             for (int i = 0; i < scopes.length; i++) {
                 if (scope.equals(scopes[i])) return i;
