@@ -38,8 +38,8 @@ import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
  */
 public class ColorPreviewAnalyzeManager implements AnalyzeManager {
 
-    private static final int SMALI_METHOD_BG_DARK = 0x24D81B60;
-    private static final int SMALI_METHOD_BG_LIGHT = 0x16D81B60;
+    private static final int SMALI_METHOD_BG_DARK = 0xFF443034;
+    private static final int SMALI_METHOD_BG_LIGHT = 0xFFFFEDED;
 
     private final AnalyzeManager delegate;
     private final CodeEditor editor;

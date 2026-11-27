@@ -1595,22 +1595,33 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
     }
 
     public void showSyntaxDialog() {
+        List<io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.CustomSyntaxInfo> customList =
+                io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.listCustomSyntaxes(requireContext());
+        String[] labels = new String[SYNTAX_LABELS.length + customList.size()];
+        String[] scopes = new String[SYNTAX_SCOPES.length + customList.size()];
+        System.arraycopy(SYNTAX_LABELS, 0, labels, 0, SYNTAX_LABELS.length);
+        System.arraycopy(SYNTAX_SCOPES, 0, scopes, 0, SYNTAX_SCOPES.length);
+        for (int i = 0; i < customList.size(); i++) {
+            io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.CustomSyntaxInfo info = customList.get(i);
+            labels[SYNTAX_LABELS.length + i] = info.displayName;
+            scopes[SYNTAX_SCOPES.length + i] = info.scopeName;
+        }
         new MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.choose_syntax)
-                .setSingleChoiceItems(SYNTAX_LABELS, currentSyntaxIndex(), (dialog, which) -> {
+                .setSingleChoiceItems(labels, currentSyntaxIndex(scopes), (dialog, which) -> {
                     dialog.dismiss();
-                    applySyntax(SYNTAX_SCOPES[which]);
+                    applySyntax(scopes[which]);
                     Extensions.showMessage(requireActivity(),
-                            getString(R.string.syntax_set_to, SYNTAX_LABELS[which]));
+                            getString(R.string.syntax_set_to, labels[which]));
                 })
                 .show();
     }
 
-    private int currentSyntaxIndex() {
+    private int currentSyntaxIndex(String[] scopes) {
         String scope = syntaxPolicy.requestedScope();
         if (scope != null) {
-            for (int i = 0; i < SYNTAX_SCOPES.length; i++) {
-                if (scope.equals(SYNTAX_SCOPES[i])) return i;
+            for (int i = 0; i < scopes.length; i++) {
+                if (scope.equals(scopes[i])) return i;
             }
         }
         return 0;
@@ -1626,7 +1637,11 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
     public void applyAutoSyntax() {
         if (isSmali) return;
         if (largeFileMode) { applySyntax(null); return; }
-        applySyntax(axml ? "text.xml" : detectScope(fileName != null ? fileName : title));
+        String targetName = fileName != null ? fileName : title;
+        String customScope = getContext() != null
+                ? io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.findScopeForFileName(getContext(), targetName)
+                : null;
+        applySyntax(axml ? "text.xml" : (customScope != null ? customScope : detectScope(targetName)));
     }
 
     private static String detectScope(String name) {
@@ -1810,6 +1825,11 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
             // per-editor registry seeded with the merged host theme instead
             // of the global one.
             ThemeRegistry editorRegistry = createEditorThemeRegistry(context);
+            TextMateLanguage custom = io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.loadLanguage(
+                    context, scope, editorRegistry);
+            if (custom != null) {
+                return new LoadedSyntax(custom, editorRegistry);
+            }
             TextMateLanguage language = editorRegistry == null
                     ? TextMateLanguage.create(scope, GrammarRegistry.getInstance(), false)
                     : TextMateLanguage.create(scope, GrammarRegistry.getInstance(), editorRegistry, false);
@@ -1822,8 +1842,12 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
 
     private void setTextMateLanguage(TextMateLanguage language, ThemeRegistry sourceRegistry, int generation) {
         if (editor == null || language == null) return;
-        Language wrapper = new ColorPreviewLanguageWrapper(
-                language, editor, io.github.abdurazaaqmohammed.feature.editor.StructuredCodeFormatter.forScope(syntaxPolicy.requestedScope()));
+        String reqScope = syntaxPolicy.requestedScope();
+        ColorPreviewLanguageWrapper wrapper = new ColorPreviewLanguageWrapper(
+                language, editor, io.github.abdurazaaqmohammed.feature.editor.StructuredCodeFormatter.forScope(reqScope));
+        if (reqScope != null && reqScope.contains("smali")) {
+            wrapper.setHighlightSmaliMethods(true);
+        }
         syncLanguageTabSize(wrapper, editor.getTabWidth());
         editor.setEditorLanguage(wrapper);
         // Record what is actually live on the editor so the next applySyntax call
