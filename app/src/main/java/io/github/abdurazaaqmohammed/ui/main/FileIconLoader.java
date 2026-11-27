@@ -186,8 +186,8 @@ public class FileIconLoader {
     private final Set<String> pendingScrollPaths = new HashSet<>();
     private ScheduledFuture<?> scrollBatchFuture;
 
-    private static final int SIZE_BATCH_FIRST_CHUNK = 24;
-    private static final int SIZE_BATCH_NEXT_CHUNK = 40;
+    private static final int SIZE_BATCH_FIRST_CHUNK = 12;
+    private static final int SIZE_BATCH_NEXT_CHUNK = 24;
     private static final long SIZE_SCROLL_COALESCE_MS = 60L;
 
     /** Cancels in-flight batch folder size prefetching when navigating away or detaching adapter. */
@@ -1083,14 +1083,27 @@ public class FileIconLoader {
                 }
             }
             if (rootAvail) {
+                final Map<String, Long> uiBuffer = new HashMap<>();
+                final long[] lastFlushMs = {System.currentTimeMillis()};
                 PrivilegeManager.Native.BatchResult batch =
-                        PrivilegeManager.Native.measureSizesBatch(context, claimedPaths, 800L, 4500L,
+                        PrivilegeManager.Native.measureSizesBatch(context, claimedPaths, 500L, 2000L,
                                 (path, bytes) -> {
                                     DirSizeCache.record(new File(path), bytes);
                                     if (!cancelled) {
-                                        postApplyFolderSizes(java.util.Collections.singletonMap(path, bytes));
+                                        uiBuffer.put(path, bytes);
+                                        long now = System.currentTimeMillis();
+                                        if (now - lastFlushMs[0] >= 80L) {
+                                            lastFlushMs[0] = now;
+                                            Map<String, Long> flush = new HashMap<>(uiBuffer);
+                                            uiBuffer.clear();
+                                            postApplyFolderSizes(flush);
+                                        }
                                     }
                                 });
+                if (!cancelled && !uiBuffer.isEmpty()) {
+                    postApplyFolderSizes(new HashMap<>(uiBuffer));
+                    uiBuffer.clear();
+                }
                 if (!batch.sizes().isEmpty()) {
                     DirSizeCache.scheduleSave();
                 }
