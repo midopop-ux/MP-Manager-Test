@@ -250,7 +250,7 @@ public class ColorPreviewAnalyzeManager implements AnalyzeManager {
             }
             styles.lineStyles.removeIf(ls -> ls.getElementCount() == 0);
         }
-        boolean isDark = scheme != null && scheme.isDark();
+        boolean isDark = isDarkScheme(scheme);
         ConstColor bgColor = new ConstColor(isDark ? SMALI_METHOD_BG_DARK : SMALI_METHOD_BG_LIGHT);
         int lineCount = content.getLineCount();
         for (int line = 0; line < lineCount; line++) {
@@ -273,5 +273,19 @@ public class ColorPreviewAnalyzeManager implements AnalyzeManager {
             if (line.charAt(i + j) != prefix.charAt(j)) return false;
         }
         return true;
+    }
+
+    private static boolean isDarkScheme(@Nullable EditorColorScheme scheme) {
+        if (scheme == null) return true;
+        try {
+            int bg = scheme.getColor(EditorColorScheme.WHOLE_BACKGROUND);
+            int r = (bg >> 16) & 0xFF;
+            int g = (bg >> 8) & 0xFF;
+            int b = bg & 0xFF;
+            double luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+            return luminance < 128;
+        } catch (Exception ignored) {
+            return scheme.isDark();
+        }
     }
 }

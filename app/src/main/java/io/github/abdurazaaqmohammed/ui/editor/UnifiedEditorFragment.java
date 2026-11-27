@@ -737,13 +737,18 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
                 // categories, so pack colors are enforced without touching
                 // the global registry; per-editor scheme likewise.
                 ThemeRegistry editorRegistry = createEditorThemeRegistry(requireContext());
-                Language language = editorRegistry == null
+                String customSmaliScope = io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.findScopeForFileName(requireContext(), "dummy.smali");
+                TextMateLanguage customLang = customSmaliScope != null
+                        ? io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.loadLanguage(requireContext(), customSmaliScope, editorRegistry)
+                        : null;
+                Language language = customLang != null ? customLang : (editorRegistry == null
                         ? TextMateLanguage.create("source.smali", GrammarRegistry.getInstance(), true)
-                        : TextMateLanguage.create("source.smali", GrammarRegistry.getInstance(), editorRegistry, true);
+                        : TextMateLanguage.create("source.smali", GrammarRegistry.getInstance(), editorRegistry, true));
                 editor.setEditorLanguage(new ColorPreviewLanguageWrapper(new CustomAutoComplete(editor, cachedInstructions, language), editor).setHighlightSmaliMethods(true));
                 editor.setColorScheme(createEditorColorScheme(requireContext(), editorRegistry));
                 applyPackEditorColors();
                 recordAppliedThemeSignature();
+                syntaxPolicy.recordApplied(customSmaliScope != null ? customSmaliScope : "source.smali", language);
             } catch (Exception e) {
                 Log.e("UnifiedEditor", "Error setting smali language", e);
                 editor.setEditorLanguage(new ColorPreviewLanguageWrapper(new EmptyLanguage(), editor));
@@ -1843,9 +1848,12 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
     private void setTextMateLanguage(TextMateLanguage language, ThemeRegistry sourceRegistry, int generation) {
         if (editor == null || language == null) return;
         String reqScope = syntaxPolicy.requestedScope();
+        Language langToWrap = (isSmali && cachedInstructions != null)
+                ? new CustomAutoComplete(editor, cachedInstructions, language)
+                : language;
         ColorPreviewLanguageWrapper wrapper = new ColorPreviewLanguageWrapper(
-                language, editor, io.github.abdurazaaqmohammed.feature.editor.StructuredCodeFormatter.forScope(reqScope));
-        if (reqScope != null && reqScope.contains("smali")) {
+                langToWrap, editor, io.github.abdurazaaqmohammed.feature.editor.StructuredCodeFormatter.forScope(reqScope));
+        if (isSmali || (reqScope != null && reqScope.contains("smali"))) {
             wrapper.setHighlightSmaliMethods(true);
         }
         syncLanguageTabSize(wrapper, editor.getTabWidth());
