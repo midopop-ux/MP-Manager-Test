@@ -1474,9 +1474,16 @@ public class RootManager {
             if (!warnedSuccess && (!commitResult.isSuccess() || (!out.contains("Success") && !out.contains("Session")))) {
                 throw new IOException("Install failed: " + commitResult.error() + " " + out);
             }
+            lastInstallWarning = (warnedSuccess || out.contains("Warning:")) ? out.trim() : "";
         } finally {
             cleanupInstallTag(tag, apkPaths.size());
         }
+    }
+
+    private volatile String lastInstallWarning = "";
+
+    public String getLastInstallWarning() {
+        return lastInstallWarning;
     }
 
     private void cleanupInstallTag(String tag, int count) {
