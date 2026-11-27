@@ -24,6 +24,7 @@ import io.github.rosemoe.sora.lang.styling.TextStyle;
 import io.github.rosemoe.sora.lang.styling.color.ConstColor;
 import io.github.rosemoe.sora.lang.styling.line.LineAnchorStyle;
 import io.github.rosemoe.sora.lang.styling.line.LineBackground;
+import io.github.rosemoe.sora.lang.styling.line.LineStyles;
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.text.ContentReference;
@@ -244,7 +245,10 @@ public class ColorPreviewAnalyzeManager implements AnalyzeManager {
 
     private static void applySmaliMethodHighlights(@NonNull Styles styles, @NonNull Content content, @Nullable EditorColorScheme scheme) {
         if (styles.lineStyles != null && !styles.lineStyles.isEmpty()) {
-            styles.lineStyles.removeIf(ls -> ls instanceof LineBackground);
+            for (LineStyles ls : styles.lineStyles) {
+                ls.eraseStyle(LineBackground.class);
+            }
+            styles.lineStyles.removeIf(ls -> ls.getElementCount() == 0);
         }
         boolean isDark = scheme != null && scheme.isDark();
         ConstColor bgColor = new ConstColor(isDark ? SMALI_METHOD_BG_DARK : SMALI_METHOD_BG_LIGHT);

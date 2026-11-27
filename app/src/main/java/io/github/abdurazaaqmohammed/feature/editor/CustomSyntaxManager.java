@@ -28,7 +28,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage;
+import io.github.rosemoe.sora.langs.textmate.registry.GrammarRegistry;
 import io.github.rosemoe.sora.langs.textmate.registry.ThemeRegistry;
+import io.github.rosemoe.sora.langs.textmate.registry.model.DefaultGrammarDefinition;
 
 /**
  * Manages user-imported syntax definitions (.tmLanguage.json, .json, and MT Manager .mtsx).
@@ -166,9 +168,10 @@ public final class CustomSyntaxManager {
             if (scopeName.equals(info.scopeName) && info.file.isFile()) {
                 try {
                     IGrammarSource source = IGrammarSource.fromFile(info.file);
+                    DefaultGrammarDefinition def = DefaultGrammarDefinition.withGrammarSource(source, info.name, info.scopeName);
                     return registry == null
-                            ? TextMateLanguage.create(source, null, true)
-                            : TextMateLanguage.create(source, null, registry, true);
+                            ? TextMateLanguage.create(def, true)
+                            : TextMateLanguage.create(def, GrammarRegistry.getInstance(), registry, true);
                 } catch (Exception ignored) {
                     return null;
                 }
