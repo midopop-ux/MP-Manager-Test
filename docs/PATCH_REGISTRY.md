@@ -11,12 +11,19 @@
 
 | Commit | Description | Pushed (`origin/test`) | Built Online (CI) | Patched Offline on Device APK |
 | :--- | :--- | :---: | :---: | :---: |
-| — | *Clean slate — all pushed commits have been built into release in Run `#46000183769`.* | — | — | — |
+| `6de3bae6` | `fix(privilege): strictly enforce WorkingMode in AccessManager/RootManager and reset root daemon on switch` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`AccessManager.smali`, `RootManager.smali`) |
+| `f03ce43e` | `fix(ui): align format row buttons, compact profile actions, and fix bottom scroll padding in overlay editor` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`ApkOverlayTools.smali` format/profile buttons) |
+| `2d05e70c` | `feat(editor): highlight Smali .method declaration lines with MT-style row background` | ✅ Yes (`origin/test`) | ❌ No | ❌ No (needs CI build for `LineBackground.<init>`) |
+| `05651745` | `feat(editor): support importing .mtsx and .tmLanguage.json syntaxes and refine Smali method header colors` | ✅ Yes (`origin/test`) | ❌ No | ❌ No (new class `CustomSyntaxManager`) |
+| `e71ac0ea` | `perf(compare): parallelize Smali disassembly and UTF-8 encoding in bounded batches during .mtcr export` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`CompareDexActivity.smali` + `MtcrExportHelper`) |
 
 ---
 
-## Active Offline APK Snapshot (`2026-11-27 12:46 UTC`)
-- **APK:** `/storage/emulated/0/Download/apks/Pref/Antigravity/MP-Manager-release.apk` (Official CI build Run `#46000183769`, signed with `permanent_release.keystore`, `mido`)
-- **Status:** Installed on device via Shizuku / ADB shell.
-- **Applied Hot-Patches:** None pending (fully synchronized with CI release).
+## Active Offline APK Snapshot (`2026-11-27 20:49 UTC`)
+- **APK:** `/storage/emulated/0/Download/MP-Manager-release.apk` (signed with `permanent_release.keystore`, `mido`)
+- **Applied Hot-Patches:**
+  1. `AccessManager.smali` & `RootManager.smali` (`6de3bae6` — strict `WorkingMode` enforcement + live `resetServe()`)
+  2. `ApkOverlayTools.smali` (`f03ce43e` — compact `B`/`I`/`U`/`Color` & `Save`/`Delete` profile buttons)
+  3. `CompareDexActivity.smali` + `classes5.dex` (`e71ac0ea` — parallel `.mtcr` export helper)
+
 
