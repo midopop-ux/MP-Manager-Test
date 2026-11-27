@@ -5,8 +5,14 @@ import io.github.abdurazaaqmohammed.feature.apk.ApkIconHelper;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
+
+import androidx.core.content.res.ResourcesCompat;
+import androidx.core.graphics.drawable.DrawableCompat;
 
 import io.github.abdurazaaqmohammed.MPManager.R;
+import io.github.abdurazaaqmohammed.ui.common.theme.ThemeRegistry;
 import io.github.abdurazaaqmohammed.util.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import java.util.List;
@@ -172,5 +178,32 @@ public record FileIconSpec(int glyph, int background, int foreground, int label)
 
     public static Drawable parentDrawable(Context context) {
         return FileIconArt.parentFolderDrawable(context);
+    }
+
+    /** Classic flat vector tile drawable used when 3D icons preference is disabled. */
+    public Drawable flatDrawable(Context context) {
+        float density = context.getResources().getDisplayMetrics().density;
+        GradientDrawable backgroundDrawable = new GradientDrawable();
+        backgroundDrawable.setCornerRadius(6 * density);
+        int tile = background;
+        if (glyph == R.drawable.ic_folder_mt) {
+            tile = ThemeRegistry.packColor(context, "folder_icon_bg", tile);
+        } else if (glyph == R.drawable.baseline_insert_drive_file_24) {
+            tile = ThemeRegistry.packColor(context, "file_icon_bg", tile);
+        }
+        backgroundDrawable.setColor(tile);
+        Drawable raw = ResourcesCompat.getDrawable(context.getResources(), glyph, context.getTheme());
+        if (raw == null) return backgroundDrawable;
+        Drawable icon = raw.mutate();
+        DrawableCompat.setTint(icon, foreground);
+        LayerDrawable layer = new LayerDrawable(new Drawable[]{backgroundDrawable, icon});
+        int inset = Math.round(6 * density);
+        layer.setLayerInset(1, inset, inset, inset, inset);
+        return layer;
+    }
+
+    /** Classic flat parent folder ("..") drawable. */
+    public static Drawable flatParentDrawable(Context context) {
+        return FOLDER.flatDrawable(context);
     }
 }

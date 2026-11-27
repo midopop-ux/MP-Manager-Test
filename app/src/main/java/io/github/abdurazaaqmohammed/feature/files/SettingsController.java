@@ -715,6 +715,18 @@ public class SettingsController {
                 sampleName, false).drawable(activity));
         previewHolder.addView(previewRow);
 
+        MaterialSwitch use3dSwitch = new MaterialSwitch(activity);
+        use3dSwitch.setText(R.string.use_3d_icons_title);
+        use3dSwitch.setChecked(UiPrefs.use3dIcons(activity));
+        use3dSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            UiPrefs.setUse3dIcons(activity, isChecked);
+            io.github.abdurazaaqmohammed.ui.main.FileIconArt.clearCache();
+            pvIcon.setImageDrawable(io.github.abdurazaaqmohammed.ui.main.FileIconSpec.forPath(
+                    sampleName, false).drawable(activity));
+            refreshFileLists();
+        });
+        previewHolder.addView(use3dSwitch);
+
         int scale = UiPrefs.getScale(activity);
         sizeSeek.setProgress(scale - 60);
         int lines = UiPrefs.getMaxLines(activity);

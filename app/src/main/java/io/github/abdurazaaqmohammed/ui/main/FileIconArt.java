@@ -18,6 +18,7 @@ import android.util.LruCache;
 
 import androidx.core.graphics.ColorUtils;
 
+import io.github.abdurazaaqmohammed.data.prefs.UiPrefs;
 import io.github.abdurazaaqmohammed.ui.common.theme.ThemeRegistry;
 
 /**
@@ -31,13 +32,24 @@ public final class FileIconArt {
 
     private FileIconArt() {}
 
-    /** Returns a crisp 3D {@link Drawable} for {@code spec} adapted to the active theme. */
+    /** Clears cached 3D bitmaps when icon preference or theme changes. */
+    public static void clearCache() {
+        BITMAP_CACHE.evictAll();
+    }
+
+    /** Returns a crisp 3D {@link Drawable} for {@code spec} adapted to the active theme, or flat when disabled. */
     public static Drawable drawable(Context context, FileIconSpec spec) {
+        if (!UiPrefs.use3dIcons(context)) {
+            return spec.flatDrawable(context);
+        }
         return drawable(context, spec, false);
     }
 
-    /** Returns a crisp 3D Rose-Gold parent folder ("..") drawable adapted to the active theme. */
+    /** Returns a crisp 3D Rose-Gold parent folder ("..") drawable, or flat when disabled. */
     public static Drawable parentFolderDrawable(Context context) {
+        if (!UiPrefs.use3dIcons(context)) {
+            return FileIconSpec.flatParentDrawable(context);
+        }
         return drawable(context, FileIconSpec.FOLDER, true);
     }
 
@@ -46,6 +58,15 @@ public final class FileIconArt {
                                     boolean parentUp, float sizePx,
                                     boolean includeCardBg, int customCardBg) {
         if (canvas == null || spec == null || sizePx <= 0f) return;
+        if (!UiPrefs.use3dIcons(context)) {
+            Drawable flat = parentUp ? FileIconSpec.flatParentDrawable(context) : spec.flatDrawable(context);
+            if (flat != null) {
+                int s = Math.max(1, Math.round(sizePx));
+                flat.setBounds(0, 0, s, s);
+                flat.draw(canvas);
+            }
+            return;
+        }
         boolean dark = ThemeRegistry.isDarkTheme(context);
         Integer packFolder = ThemeRegistry.packColorOrNull(context, "folder_icon_bg");
         Integer packFile = ThemeRegistry.packColorOrNull(context, "file_icon_bg");
