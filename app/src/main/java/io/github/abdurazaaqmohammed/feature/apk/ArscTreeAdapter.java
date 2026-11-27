@@ -214,16 +214,16 @@ public class ArscTreeAdapter extends RecyclerView.Adapter<ArscTreeAdapter.Holder
      * Returns true if any directory was collapsed, false if already at the expanded-root level.
      */
     public boolean collapseDeepestExpanded() {
-        int maxLevel = 0;
+        int maxDepth = 0;
         for (ArscData.Node n : visible) {
-            if (n.dir && n.expanded && n.level > maxLevel) {
-                maxLevel = n.level;
+            if (n.dir && n.expanded && n.depth > maxDepth) {
+                maxDepth = n.depth;
             }
         }
-        if (maxLevel < 1) return false;
+        if (maxDepth < 1) return false;
         boolean changed = false;
         for (ArscData.Node n : visible) {
-            if (n.dir && n.expanded && n.level == maxLevel) {
+            if (n.dir && n.expanded && n.depth == maxDepth) {
                 n.expanded = false;
                 changed = true;
             }
