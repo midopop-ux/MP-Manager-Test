@@ -22,10 +22,11 @@
 | `00c3b82e` | `perf(ui): coalesce streaming dirsize UI updates every 80ms and tighten batch timeouts` | ❌ No (Local) | ❌ No | ✅ Yes (batch chunks `12`/`24` + timeouts `500ms`/`2000ms` via Smali) |
 | `d7837f8d` | `feat(mpio,ui): measure symlinked target directories safely with virtual_filesystem guard` | ❌ No (Local) | ❌ No | ✅ Yes (`mpio` binary + `FileIconLoader.shouldMeasureFolder` Smali) |
 | `33c32ac1` | `perf(mpio): exclude redundant /mnt FUSE bind-mount trees from recursive sizing` | ❌ No (Local) | ❌ No | ✅ Yes (`assets/bin/arm64-v8a/mpio` binary replaced) |
+| `08031bd7` | `fix(files): treat Android/media as direct local path so local edits refresh immediately` | ❌ No (Local) | ❌ No | ✅ Yes (`MainActivity.smali` regex patched) |
 
 ---
 
-## 3. Offline APK Hot-Patch Details (`2026-11-27 11:06 UTC`)
+## 3. Offline APK Hot-Patch Details (`2026-11-27 11:13 UTC`)
 - **Target APK:** `/storage/emulated/0/Download/apks/Pref/Antigravity/MP-Manager-release.apk`
 - **Signing Key:** `permanent_release.keystore` (`alias: mido`)
 - **Installed on Device:** ✅ Yes (`pm install -r` -> `Success`)
@@ -35,6 +36,8 @@
      - `shouldMeasureFolder`: removed `RootFile.isLink()`, `ShizukuFile.isLink()`, and `FileUtils.isSymlink()` exclusions.
      - `runBatchPrefetch`: reduced `SIZE_BATCH_FIRST_CHUNK` (`0x18` -> `0xc`) and `SIZE_BATCH_NEXT_CHUNK` (`0x28` -> `0x18`).
      - `measureDirectoryBatch`: tightened `measureSizesBatch` timeouts (`800ms/4500ms` -> `500ms/2000ms`).
+  3. `smali_classes3/.../MainActivity.smali`:
+     - `isDirectLocalPath`: removed `media` from non-local regex (`data|obb|media` -> `data|obb`).
 
 ---
 
