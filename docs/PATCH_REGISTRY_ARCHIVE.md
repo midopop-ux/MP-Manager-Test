@@ -2,6 +2,18 @@
 
 > Completed builds & commits that have been pushed to `origin/test` **and** built/released via GitHub Actions CI.
 
+## Build Run `#46076049032` (`2026-11-27 22:30 UTC`)
+- **Branch:** `test` (Head: `6593ffd5`)
+- **ProGuard Mapping:** `/data/user/0/com.agy/files/.gemini/antigravity-app/scratch/mp_patch/mappings/mapping-release-6593ffd5.txt`
+- **Included Commits:**
+  - `6de3bae6` — `fix(privilege): strictly enforce WorkingMode in AccessManager/RootManager and reset root daemon on switch`
+  - `f03ce43e` — `fix(ui): align format row buttons, compact profile actions, and fix bottom scroll padding in overlay editor`
+  - `2d05e70c` — `feat(editor): highlight Smali .method declaration lines with MT-style row background`
+  - `05651745` — `feat(editor): support importing .mtsx and .tmLanguage.json syntaxes and refine Smali method header colors`
+  - `e71ac0ea` — `perf(compare): parallelize Smali disassembly and UTF-8 encoding in bounded batches during .mtcr export`
+  - `8461eae2` — `fix(privilege): isolate working modes strictly across AccessManager, RootManager, and MainActivity listing`
+  - `6593ffd5` — `feat(crypto): add content-first file crypto analyzer and standalone decryption workspace`
+
 ## Build Run `#46000183769` (`2026-11-27 12:45 UTC`)
 - **Branch:** `test` (Head: `c0700262`)
 - **Included Commits:**

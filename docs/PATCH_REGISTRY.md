@@ -3,19 +3,14 @@
 > **Active-only tracker:** Keeps only commits **not yet built in CI** and **offline hot-patches** applied to the device APK.
 > Once a commit is pushed **and** built by CI, move it to [PATCH_REGISTRY_ARCHIVE.md](./PATCH_REGISTRY_ARCHIVE.md).
 
-- **Latest Online CI Baseline:** Run `#46000183769` (`2026-11-27 12:45 UTC`, commit `c0700262`) -> see [PATCH_REGISTRY_ARCHIVE.md](./PATCH_REGISTRY_ARCHIVE.md).
+- **Latest Online CI Baseline:** Run `#46076049032` (`2026-11-27 22:30 UTC`, commit `6593ffd5`) -> see [PATCH_REGISTRY_ARCHIVE.md](./PATCH_REGISTRY_ARCHIVE.md).
+- **ProGuard Mapping Location:** `/data/user/0/com.agy/files/.gemini/antigravity-app/scratch/mp_patch/mappings/latest-mapping.txt` (symlinked to `mapping-release-6593ffd5.txt`).
 
 ---
 
 ## Pending / Unbuilt Commits & Offline Hot-Patches
 
-| Commit | Description | Pushed (`origin/test`) | Built Online (CI) | Patched Offline on Device APK |
-| :--- | :--- | :---: | :---: | :---: |
-| `6de3bae6` | `fix(privilege): strictly enforce WorkingMode in AccessManager/RootManager and reset root daemon on switch` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`AccessManager.smali`, `RootManager.smali`) |
-| `f03ce43e` | `fix(ui): align format row buttons, compact profile actions, and fix bottom scroll padding in overlay editor` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`ApkOverlayTools.smali` format/profile buttons) |
-| `2d05e70c` | `feat(editor): highlight Smali .method declaration lines with MT-style row background` | ✅ Yes (`origin/test`) | ❌ No | ❌ No (needs CI build for `LineBackground.<init>`) |
-| `05651745` | `feat(editor): support importing .mtsx and .tmLanguage.json syntaxes and refine Smali method header colors` | ✅ Yes (`origin/test`) | ❌ No | ❌ No (new class `CustomSyntaxManager`) |
-| `e71ac0ea` | `perf(compare): parallelize Smali disassembly and UTF-8 encoding in bounded batches during .mtcr export` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`CompareDexActivity.smali` + `MtcrExportHelper`) |
+*(No pending commits currently. All commits up to `6593ffd5` have been built in CI Run `#46076049032`).*
 
 ---
 
