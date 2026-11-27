@@ -963,6 +963,11 @@ static int measure_target_path(const char *raw_path, uint64_t timeout_ms,
         struct stat st;
         if (stat(target, &st) == 0 && S_ISDIR(st.st_mode)) {
             target_is_dir = true;
+            char real_target[4096];
+            if (realpath(target, real_target) != NULL && virtual_filesystem(real_target)) {
+                out_stats->dirs = 1;
+                return 0;
+            }
         }
     }
 

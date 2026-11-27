@@ -950,8 +950,6 @@ public class FileIconLoader {
 
     private boolean shouldMeasureFolder(File file, int mode) {
         if (file == null || mode == UiPrefs.FOLDER_SIZE_NONE || !treatAsFolder(file)) return false;
-        if (file instanceof RootFile rf && rf.isLink()) return false;
-        if (file instanceof ShizukuFile sf && sf.isLink()) return false;
         String path;
         try {
             path = file.getAbsolutePath();
@@ -960,7 +958,7 @@ public class FileIconLoader {
         }
         if (FileTreeStats.virtualFilesystem(path)) return false;
         if (mode == UiPrefs.FOLDER_SIZE_USER && !isUserStorage(path)) return false;
-        return !FileUtils.isSymlink(file);
+        return true;
     }
 
     /**
