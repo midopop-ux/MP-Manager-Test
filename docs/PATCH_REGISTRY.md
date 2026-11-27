@@ -19,6 +19,7 @@
 | `5c7320ae` | `feat(ui): make 3D Icons optional via preference (off by default, flat fallback)` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`UiPrefs`, `FileIconSpec`, `FileIconArt`, `SettingsController` Smali) |
 | `7acc4e22` | `fix(ui): restore 0xFF252525 classic folder tile and invalidate icon caches on 3D toggle` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`FileIconSpec.smali`, `FileIconLoader.smali`) |
 | `a6153a86` | `fix(installer): treat Android 15 'Completed with warning' pm install output as success` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`RootManager.smali`, `PrivilegedInstaller.smali`) |
+| `a48d54fb` | `fix(installer): check Completed with warning before exit code in pm install-commit` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`RootManager.smali`, `PrivilegedInstaller.smali`) |
 
 ---
 
