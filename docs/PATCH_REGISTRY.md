@@ -11,17 +11,19 @@
 
 | Commit | Description | Pushed (`origin/test`) | Built Online (CI) | Patched Offline on Device APK |
 | :--- | :--- | :---: | :---: | :---: |
-| `00c3b82e` | `perf(ui): coalesce streaming dirsize UI updates every 80ms and tighten batch timeouts` | ❌ Local | ❌ No | ✅ Yes (batch chunks `12`/`24` + timeouts `500ms`/`2000ms` via Smali) |
-| `d7837f8d` | `feat(mpio,ui): measure symlinked target directories safely with virtual_filesystem guard` | ❌ Local | ❌ No | ✅ Yes (`mpio` binary + `FileIconLoader.shouldMeasureFolder` Smali) |
-| `33c32ac1` | `perf(mpio): exclude redundant /mnt FUSE bind-mount trees from recursive sizing` | ❌ Local | ❌ No | ✅ Yes (`assets/bin/arm64-v8a/mpio` binary replaced) |
-| `caf7e6f5` | `docs(ci): add PATCH_REGISTRY.md and upload ProGuard mapping.txt in CI artifacts` | ❌ Local | ❌ No | — (CI/Docs) |
-| `08031bd7` | `fix(files): treat Android/media as direct local path so local edits refresh immediately` | ❌ Local | ❌ No | ✅ Yes (`MainActivity.smali` regex patched) |
+| `00c3b82e` | `perf(ui): coalesce streaming dirsize UI updates every 80ms and tighten batch timeouts` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (batch chunks `12`/`24` + timeouts `500ms`/`2000ms` via Smali) |
+| `d7837f8d` | `feat(mpio,ui): measure symlinked target directories safely with virtual_filesystem guard` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`mpio` binary + `FileIconLoader.shouldMeasureFolder` Smali) |
+| `33c32ac1` | `perf(mpio): exclude redundant /mnt FUSE bind-mount trees from recursive sizing` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`assets/bin/arm64-v8a/mpio` binary replaced) |
+| `caf7e6f5` | `docs(ci): add PATCH_REGISTRY.md and upload ProGuard mapping.txt in CI artifacts` | ✅ Yes (`origin/test`) | ❌ No | — (CI/Docs) |
+| `08031bd7` | `fix(files): treat Android/media as direct local path so local edits refresh immediately` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`MainActivity.smali` regex patched) |
+| `5c7320ae` | `feat(ui): make 3D Icons optional via preference (off by default, flat fallback)` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`UiPrefs`, `FileIconSpec`, `FileIconArt`, `SettingsController` Smali) |
 
 ---
 
-## Active Offline APK Snapshot (`2026-11-27 11:13 UTC`)
+## Active Offline APK Snapshot (`2026-11-27 11:33 UTC`)
 - **APK:** `/storage/emulated/0/Download/apks/Pref/Antigravity/MP-Manager-release.apk` (signed with `permanent_release.keystore`, `mido`)
 - **Applied Hot-Patches:**
   1. `assets/bin/arm64-v8a/mpio` (`33c32ac1`)
   2. `smali_classes3/.../FileIconLoader.smali` (`00c3b82e` + `d7837f8d`)
   3. `smali_classes3/.../MainActivity.smali` (`08031bd7`)
+  4. `smali_classes3/.../UiPrefs.smali`, `FileIconSpec.smali`, `FileIconArt.smali`, `SettingsController.smali` (`5c7320ae` — `3D Icons` toggle in Appearance, default off)
