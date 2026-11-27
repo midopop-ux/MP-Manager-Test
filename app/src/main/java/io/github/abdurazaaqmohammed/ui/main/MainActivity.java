@@ -1933,7 +1933,7 @@ public class MainActivity extends BaseActivity implements PaneNavigationControll
         if (path == null || path.isEmpty()) return false;
         if (PrivilegeManager.Shizuku.isAndroidDataPath(path)) return false;
         if (path.equals("/sdcard") || path.startsWith("/storage/emulated/") || path.startsWith("/sdcard/")) {
-            return !path.matches("^(?:/storage/emulated/\\d+|/sdcard)/Android/(?:data|obb|media)(?:/.*)?$");
+            return !path.matches("^(?:/storage/emulated/\\d+|/sdcard)/Android/(?:data|obb)(?:/.*)?$");
         }
         if (path.startsWith("/storage/")
                 && !path.equals("/storage")
