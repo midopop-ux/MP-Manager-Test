@@ -1470,7 +1470,8 @@ public class RootManager {
 
             ShellResult commitResult = execute("pm install-commit " + sessionId);
             String out = commitResult.output() != null ? commitResult.output() : "";
-            if (!commitResult.isSuccess() || (!out.contains("Success") && !out.contains("Session") && !out.contains("Completed with warning"))) {
+            boolean warnedSuccess = out.contains("Completed with warning") && !out.contains("Failure");
+            if (!warnedSuccess && (!commitResult.isSuccess() || (!out.contains("Success") && !out.contains("Session")))) {
                 throw new IOException("Install failed: " + commitResult.error() + " " + out);
             }
         } finally {

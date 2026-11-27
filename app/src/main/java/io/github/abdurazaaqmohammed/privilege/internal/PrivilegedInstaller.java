@@ -420,8 +420,10 @@ public final class PrivilegedInstaller {
                     }
                 }
                 ShizukuShell.Result commit = ShizukuShell.exec("pm install-commit " + session, 120);
-                if (!commit.success || (!commit.stdout.contains("Success") && !commit.stdout.contains("Session") && !commit.stdout.contains("Completed with warning")))
-                    throw new IllegalStateException("Shizuku install-commit failed: " + commit.stdout + " " + commit.stderr);
+                String out = commit.stdout != null ? commit.stdout : "";
+                boolean warnedSuccess = out.contains("Completed with warning") && !out.contains("Failure");
+                if (!warnedSuccess && (!commit.success || (!out.contains("Success") && !out.contains("Session"))))
+                    throw new IllegalStateException("Shizuku install-commit failed: " + out + " " + commit.stderr);
             } finally {
                 // Always clear /data/local/tmp, even when a write or commit failed.
                 StringBuilder cleanup = new StringBuilder();
