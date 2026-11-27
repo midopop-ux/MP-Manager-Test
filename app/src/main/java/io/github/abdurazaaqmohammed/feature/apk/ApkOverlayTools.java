@@ -2470,24 +2470,38 @@ public class ApkOverlayTools {
     }
 
     private void addFormatRow(LinearLayout row, EditText target) {
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        int margin = dp(3);
+        int btnHeight = dp(40);
         String[][] buttons = {{"B", "<b>", "</b>"}, {"I", "<i>", "</i>"}, {"U", "<u>", "</u>"}};
         for (String[] spec : buttons) {
             MaterialButton btn = new MaterialButton(context);
             btn.setText(spec[0]);
+            btn.setSingleLine(true);
+            btn.setMaxLines(1);
+            btn.setMinHeight(0);
+            btn.setMinimumHeight(0);
+            btn.setPadding(dp(4), 0, dp(4), 0);
             btn.setFocusable(false);
             btn.setFocusableInTouchMode(false);
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            int margin = dp(4);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, btnHeight, 1f);
             params.setMargins(margin, 0, margin, 0);
             btn.setOnClickListener(v -> wrapSelection(target, spec[1], spec[2]));
             row.addView(btn, params);
         }
         MaterialButton colorBtn = new MaterialButton(context);
         colorBtn.setText(R.string.color);
+        colorBtn.setSingleLine(true);
+        colorBtn.setMaxLines(1);
+        colorBtn.setMinHeight(0);
+        colorBtn.setMinimumHeight(0);
+        colorBtn.setPadding(dp(6), 0, dp(6), 0);
         colorBtn.setFocusable(false);
         colorBtn.setFocusableInTouchMode(false);
+        LinearLayout.LayoutParams colorParams = new LinearLayout.LayoutParams(0, btnHeight, 1.3f);
+        colorParams.setMargins(margin, 0, margin, 0);
         colorBtn.setOnClickListener(v -> showColorWheelDialog(target));
-        row.addView(colorBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.4f));
+        row.addView(colorBtn, colorParams);
     }
 
     private static void wrapSelection(EditText target, String open, String close) {
