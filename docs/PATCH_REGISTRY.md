@@ -17,6 +17,8 @@
 | `caf7e6f5` | `docs(ci): add PATCH_REGISTRY.md and upload ProGuard mapping.txt in CI artifacts` | ✅ Yes (`origin/test`) | ❌ No | — (CI/Docs) |
 | `08031bd7` | `fix(files): treat Android/media as direct local path so local edits refresh immediately` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`MainActivity.smali` regex patched) |
 | `5c7320ae` | `feat(ui): make 3D Icons optional via preference (off by default, flat fallback)` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`UiPrefs`, `FileIconSpec`, `FileIconArt`, `SettingsController` Smali) |
+| `7acc4e22` | `fix(ui): restore 0xFF252525 classic folder tile and invalidate icon caches on 3D toggle` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`FileIconSpec.smali`, `FileIconLoader.smali`) |
+| `a6153a86` | `fix(installer): treat Android 15 'Completed with warning' pm install output as success` | ✅ Yes (`origin/test`) | ❌ No | ✅ Yes (`RootManager.smali`, `PrivilegedInstaller.smali`) |
 
 ---
 
