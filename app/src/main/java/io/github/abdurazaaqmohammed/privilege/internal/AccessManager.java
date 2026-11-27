@@ -50,10 +50,13 @@ public final class AccessManager {
         RootManager rm = RootManager.getInstance(context);
         WorkingModePrefs.WorkingMode mode = rm.getWorkingMode();
         if (mode == WorkingModePrefs.WorkingMode.ROOT) {
-            return rm.isRootAvailable() ? Backend.ROOT : Backend.NONE;
+            if (rm.isRootAvailable() || !ShizukuManager.ready()) return Backend.ROOT;
+            return Build.VERSION.SDK_INT >= 23 ? Backend.SHIZUKU : Backend.NONE;
         }
+        if (rm.isRootAvailableCached()) return Backend.ROOT;
         if (mode == WorkingModePrefs.WorkingMode.SHIZUKU && Build.VERSION.SDK_INT >= 23) {
-            return ShizukuManager.ready() ? Backend.SHIZUKU : Backend.NONE;
+            if (rm.isRootAvailable()) return Backend.ROOT;
+            return Backend.SHIZUKU;
         }
         return Backend.NONE;
     }
