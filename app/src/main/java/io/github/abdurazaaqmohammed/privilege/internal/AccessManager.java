@@ -230,35 +230,13 @@ public final class AccessManager {
         }
         Backend backend = active(context);
         File dst = newStagingTarget(context, srcAbsPath);
-        IOException firstFailure;
         try {
             stageForRead(context, backend, srcAbsPath, dst);
             return dst;
         } catch (IOException e) {
             //noinspection ResultOfMethodCallIgnored
             dst.delete();
-            firstFailure = e;
-            if (backend == Backend.ROOT && canUseShizuku(context)) {
-                backend = Backend.SHIZUKU;
-            } else if (backend == Backend.SHIZUKU && canUseRoot(context)) {
-                backend = Backend.ROOT;
-            } else {
-                throw firstFailure;
-            }
-        }
-        File retried = newStagingTarget(context, srcAbsPath);
-        try {
-            // The two backends have genuinely different permissions: the shell uid
-            // often cannot read what root can (e.g. /vendor/build.prop is 0640
-            // root:root and readable by neither the app nor the shell), so a
-            // failure on one is worth retrying on the other before giving up.
-            stageForRead(context, backend, srcAbsPath, retried);
-            return retried;
-        } catch (IOException retryFailure) {
-            //noinspection ResultOfMethodCallIgnored
-            retried.delete();
-            retryFailure.addSuppressed(firstFailure);
-            throw retryFailure;
+            throw e;
         }
     }
 
@@ -278,10 +256,9 @@ public final class AccessManager {
     private static boolean rootOpsEnabled(Context context) {
         if (context == null) return false;
         RootManager rm = RootManager.getInstance(context);
+        if (!rm.isRootMode()) return false;
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        return rm.isRootMode()
-                ? prefs.getBoolean("root_file_ops", !prefs.contains("root_file_ops"))
-                : (prefs.getBoolean("root_file_ops", false) || prefs.getBoolean("shizuku_file_ops", false));
+        return prefs.getBoolean("root_file_ops", !prefs.contains("root_file_ops"));
     }
 
     private static boolean canUseRoot(Context context) {
@@ -294,6 +271,8 @@ public final class AccessManager {
 
     private static boolean canUseShizuku(Context context) {
         try {
+            RootManager rm = RootManager.getInstance(context);
+            if (rm.getWorkingMode() != WorkingModePrefs.WorkingMode.SHIZUKU) return false;
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
             return prefs.getBoolean("shizuku_file_ops", false) && ShizukuManager.ready();
         } catch (Exception e) {
@@ -851,8 +830,8 @@ public final class AccessManager {
     public static long dirSize(Context context, String path) {
         if (path == null || path.isEmpty()) return -1;
         try {
-            boolean rootAvail = context != null && RootManager.getInstance(context).isRootAvailable();
-            if (rootAvail) {
+            Backend backend = active(context);
+            if (backend == Backend.ROOT) {
                 long fast = NativeRootManager.dirSize(context, path, 3500L);
                 if (fast >= 0 || fast == NativeRootManager.DIR_SIZE_TIMED_OUT) {
                     return fast;
@@ -872,8 +851,7 @@ public final class AccessManager {
                 }
                 return -1;
             }
-            Backend backend = active(context);
-            if (backend == Backend.SHIZUKU || ShizukuManager.ready()) {
+            if (backend == Backend.SHIZUKU) {
                 return ShizukuManager.dirSize(context, path);
             }
         } catch (Exception ignored) {
@@ -885,8 +863,8 @@ public final class AccessManager {
         Map<String, Long> map = new HashMap<>();
         if (path == null || path.isEmpty()) return map;
         try {
-            boolean rootAvail = context != null && RootManager.getInstance(context).isRootAvailable();
-            if (rootAvail) {
+            Backend backend = active(context);
+            if (backend == Backend.ROOT) {
                 File[] siblings = RootManager.getInstance(context).listRootFilesWithStat(path);
                 if (siblings != null) {
                     List<String> directories = new ArrayList<>();
@@ -920,8 +898,7 @@ public final class AccessManager {
                 }
                 return map;
             }
-            Backend backend = active(context);
-            if (backend == Backend.SHIZUKU || ShizukuManager.ready()) {
+            if (backend == Backend.SHIZUKU) {
                 Map<String, Long> shizukuMap = ShizukuManager.dirSizeTree(context, path);
                 if (shizukuMap != null && !shizukuMap.isEmpty()) {
                     map.putAll(shizukuMap);
@@ -1031,14 +1008,15 @@ public final class AccessManager {
         if (context == null) return false;
         RootManager rm = RootManager.getInstance(context);
         WorkingModePrefs.WorkingMode mode = rm.getWorkingMode();
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        if (rm.isRootAvailableCached()) {
-            return rootOpsEnabled(context);
-        }
         if (mode == WorkingModePrefs.WorkingMode.ROOT) {
+            if (rm.isRootAvailableCached()) {
+                return rootOpsEnabled(context);
+            }
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
             return prefs.getBoolean("root_file_ops", !prefs.contains("root_file_ops"));
         }
         if (mode == WorkingModePrefs.WorkingMode.SHIZUKU) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
             return prefs.getBoolean("shizuku_file_ops", false);
         }
         return false;
@@ -1054,10 +1032,11 @@ public final class AccessManager {
     public static boolean shellCopyOn(Context context) {
         if (context == null) return false;
         try {
-            RootManager rm = RootManager.getInstance(context);
-            if (rm.isRootAvailable()) return true;
             Backend backend = active(context);
-            if (backend == Backend.SHIZUKU || (!rm.isRootAvailableCached() && ShizukuManager.ready())) {
+            if (backend == Backend.ROOT) {
+                return rootOpsEnabled(context);
+            }
+            if (backend == Backend.SHIZUKU) {
                 return ShizukuManager.ready() && ShizukuShell.isGranted();
             }
             return false;
@@ -1096,7 +1075,7 @@ public final class AccessManager {
         if (needsElevated(context, absPath)) return true;
         try {
             if (ShizukuFile.isAndroidDataPath(absPath)) {
-                return RootManager.getInstance(context).isRootAvailable() || ShizukuManager.ready();
+                return active(context) != Backend.NONE;
             }
         } catch (Throwable ignored) {
         }
