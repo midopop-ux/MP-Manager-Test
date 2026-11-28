@@ -1,9 +1,11 @@
 package io.github.abdurazaaqmohammed.feature.editor;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.OpenableColumns;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -17,13 +19,16 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,7 +43,10 @@ import io.github.rosemoe.sora.langs.textmate.registry.model.DefaultGrammarDefini
  */
 public final class CustomSyntaxManager {
 
+    private static final String TAG = "CustomSyntaxManager";
     private static final String SYNTAX_DIR_NAME = "syntaxes";
+    private static final String PREFS_NAME = "custom_syntax_prefs";
+    private static final String KEY_HIDDEN_BUILTINS = "hidden_builtin_syntaxes";
     private static final int MAX_SYNTAX_BYTES = 2 * 1024 * 1024;
 
     private static volatile List<CustomSyntaxInfo> cachedSyntaxes;
@@ -83,11 +91,12 @@ public final class CustomSyntaxManager {
         }
 
         String lowerName = rawName.toLowerCase(Locale.ROOT);
+        boolean fromMtsx = lowerName.endsWith(".mtsx") || looksLikeMtsx(content);
         JSONObject tmGrammar;
         JSONObject mtColors = null;
         String baseSlug;
 
-        if (lowerName.endsWith(".mtsx") || looksLikeMtsx(content)) {
+        if (fromMtsx) {
             tmGrammar = convertMtsxToTextMate(content, rawName);
             baseSlug = sanitizeSlug(tmGrammar.optString("name", stripExtension(rawName)));
             mtColors = extractMtsxThemeColors(content, baseSlug, tmGrammar.getString("scopeName"));
@@ -114,6 +123,15 @@ public final class CustomSyntaxManager {
         } else if (colorFile.exists()) {
             //noinspection ResultOfMethodCallIgnored
             colorFile.delete();
+        }
+        File mtsxFile = new File(syntaxDir, baseSlug + ".mtsx");
+        if (fromMtsx) {
+            try (FileOutputStream out = new FileOutputStream(mtsxFile)) {
+                out.write(content.getBytes(StandardCharsets.UTF_8));
+            }
+        } else if (mtsxFile.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            mtsxFile.delete();
         }
 
         invalidateCache();
@@ -179,11 +197,7 @@ public final class CustomSyntaxManager {
         if (scopeName == null || scopeName.isEmpty()) return Collections.emptyMap();
         for (CustomSyntaxInfo info : listCustomSyntaxes(context)) {
             if (scopeName.equals(info.scopeName) && info.file.isFile()) {
-                String fileName = info.file.getName();
-                String baseName = fileName.endsWith(".tmLanguage.json")
-                        ? fileName.substring(0, fileName.length() - ".tmLanguage.json".length())
-                        : stripExtension(fileName);
-                File colorFile = new File(info.file.getParentFile(), baseName + ".mtcolors");
+                File colorFile = new File(info.file.getParentFile(), baseNameFor(info.file) + ".mtcolors");
                 if (!colorFile.isFile()) return Collections.emptyMap();
                 try {
                     JSONObject root = new JSONObject(readTextFromFile(colorFile));
@@ -218,7 +232,8 @@ public final class CustomSyntaxManager {
                     return registry == null
                             ? TextMateLanguage.create(def, true)
                             : TextMateLanguage.create(def, GrammarRegistry.getInstance(), registry, true);
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to load custom syntax: " + scopeName, e);
                     return null;
                 }
             }
@@ -713,6 +728,300 @@ public final class CustomSyntaxManager {
             out.write(buf, 0, len);
         }
         return out.toString(StandardCharsets.UTF_8.name());
+    }
+
+    private static String baseNameFor(File file) {
+        String fileName = file.getName();
+        return fileName.endsWith(".tmLanguage.json")
+                ? fileName.substring(0, fileName.length() - ".tmLanguage.json".length())
+                : stripExtension(fileName);
+    }
+
+    public static boolean isBuiltInHidden(@NonNull Context context, @NonNull String label) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        Set<String> hidden = prefs.getStringSet(KEY_HIDDEN_BUILTINS, null);
+        return hidden != null && hidden.contains(label);
+    }
+
+    public static void hideBuiltInSyntax(@NonNull Context context, @NonNull String label) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        Set<String> prev = prefs.getStringSet(KEY_HIDDEN_BUILTINS, null);
+        Set<String> next = prev == null ? new HashSet<>() : new HashSet<>(prev);
+        next.add(label);
+        prefs.edit().putStringSet(KEY_HIDDEN_BUILTINS, next).apply();
+    }
+
+    public static boolean deleteCustomSyntax(@NonNull Context context, @NonNull String scopeName) {
+        for (CustomSyntaxInfo info : listCustomSyntaxes(context)) {
+            if (scopeName.equals(info.scopeName)) {
+                String base = baseNameFor(info.file);
+                File dir = info.file.getParentFile();
+                boolean deleted = info.file.delete();
+                if (dir != null) {
+                    File colors = new File(dir, base + ".mtcolors");
+                    if (colors.exists()) colors.delete();
+                    File rawMtsx = new File(dir, base + ".mtsx");
+                    if (rawMtsx.exists()) rawMtsx.delete();
+                }
+                invalidateCache();
+                return deleted;
+            }
+        }
+        return false;
+    }
+
+    @NonNull
+    public static String suggestedExportFileName(@Nullable String displayName, boolean asMtsx) {
+        String safe = (displayName == null ? "syntax" : displayName.trim())
+                .replaceAll("[^A-Za-z0-9._-]+", "_")
+                .replaceAll("^_+|_+$", "");
+        if (safe.isEmpty()) safe = "syntax";
+        return safe + (asMtsx ? ".mtsx" : ".tmLanguage.json");
+    }
+
+    public static void exportSyntaxToUri(
+            @NonNull Context context,
+            @NonNull String scopeName,
+            @NonNull String displayName,
+            boolean isCustom,
+            boolean asMtsx,
+            @NonNull Uri destUri) throws Exception {
+        String outputContent;
+        if (isCustom) {
+            CustomSyntaxInfo target = null;
+            for (CustomSyntaxInfo info : listCustomSyntaxes(context)) {
+                if (scopeName.equals(info.scopeName)) {
+                    target = info;
+                    break;
+                }
+            }
+            if (target == null || !target.file.isFile()) {
+                throw new IllegalStateException("Custom syntax file not found: " + scopeName);
+            }
+            File parent = target.file.getParentFile();
+            String base = baseNameFor(target.file);
+            File rawMtsx = parent == null ? null : new File(parent, base + ".mtsx");
+            if (asMtsx && rawMtsx != null && rawMtsx.isFile()) {
+                outputContent = readTextFromFile(rawMtsx);
+            } else {
+                String jsonStr = readTextFromFile(target.file);
+                if (!asMtsx) {
+                    outputContent = jsonStr;
+                } else {
+                    JSONObject grammar = new JSONObject(jsonStr);
+                    Map<String, String> light = loadThemeColors(context, scopeName, false);
+                    Map<String, String> dark = loadThemeColors(context, scopeName, true);
+                    outputContent = convertTextMateToMtsx(grammar, displayName, light, dark);
+                }
+            }
+        } else {
+            String assetPath = findBuiltInGrammarAsset(context, scopeName);
+            if (assetPath == null) {
+                throw new IllegalStateException("Built-in grammar asset not found: " + scopeName);
+            }
+            String jsonStr;
+            try (InputStream in = context.getAssets().open(assetPath)) {
+                jsonStr = readAll(in);
+            }
+            if (!asMtsx) {
+                outputContent = jsonStr;
+            } else {
+                outputContent = convertTextMateToMtsx(
+                        new JSONObject(jsonStr), displayName,
+                        Collections.emptyMap(), Collections.emptyMap());
+            }
+        }
+
+        try (OutputStream out = context.getContentResolver().openOutputStream(destUri)) {
+            if (out == null) throw new IllegalStateException("Cannot open output stream");
+            out.write(outputContent.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        }
+    }
+
+    @Nullable
+    private static String findBuiltInGrammarAsset(Context context, String scopeName) {
+        try (InputStream in = context.getAssets().open("languages.json")) {
+            JSONObject root = new JSONObject(readAll(in));
+            JSONArray langs = root.optJSONArray("languages");
+            if (langs == null) return null;
+            for (int i = 0; i < langs.length(); i++) {
+                JSONObject item = langs.optJSONObject(i);
+                if (item != null && scopeName.equals(item.optString("scopeName", ""))) {
+                    return item.optString("grammar", null);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed reading languages.json", e);
+        }
+        return null;
+    }
+
+    @NonNull
+    static String convertTextMateToMtsx(
+            JSONObject grammar,
+            String displayName,
+            Map<String, String> lightColors,
+            Map<String, String> darkColors) {
+        String name = displayName != null && !displayName.trim().isEmpty()
+                ? displayName.trim()
+                : grammar.optString("name", "Syntax");
+        List<String> exts = extractExtensions(grammar);
+        if (exts.isEmpty()) {
+            String scope = grammar.optString("scopeName", "");
+            int dot = scope.lastIndexOf('.');
+            if (dot >= 0 && dot + 1 < scope.length()) {
+                exts.add(scope.substring(dot + 1));
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n    name: [\"").append(escapeJavaString(name)).append('"');
+        for (String ext : exts) {
+            sb.append(", \".").append(escapeJavaString(ext)).append('"');
+        }
+        sb.append("]\n");
+
+        Map<String, String[]> colorPairs = new LinkedHashMap<>();
+        if (lightColors != null) {
+            for (Map.Entry<String, String> e : lightColors.entrySet()) {
+                String mt = reverseMapTextMateScopeToMtColor(e.getKey());
+                colorPairs.put(mt, new String[]{e.getValue(), darkColors != null ? darkColors.getOrDefault(e.getKey(), e.getValue()) : e.getValue()});
+            }
+        }
+        if (darkColors != null) {
+            for (Map.Entry<String, String> e : darkColors.entrySet()) {
+                String mt = reverseMapTextMateScopeToMtColor(e.getKey());
+                if (!colorPairs.containsKey(mt)) {
+                    colorPairs.put(mt, new String[]{e.getValue(), e.getValue()});
+                }
+            }
+        }
+        if (!colorPairs.isEmpty()) {
+            sb.append("    colors: [\n");
+            for (Map.Entry<String, String[]> e : colorPairs.entrySet()) {
+                sb.append("        \"").append(escapeJavaString(e.getKey())).append("\", ")
+                        .append(e.getValue()[0]).append(", ").append(e.getValue()[1]).append('\n');
+            }
+            sb.append("    ]\n");
+        }
+
+        JSONObject repo = grammar.optJSONObject("repository");
+        List<String> ruleLines = new ArrayList<>();
+        String[] lineCommentPrefix = new String[1];
+        collectMtsxRules(grammar.optJSONArray("patterns"), repo, new HashSet<>(), ruleLines, lineCommentPrefix);
+
+        if (lineCommentPrefix[0] != null && !lineCommentPrefix[0].isEmpty()) {
+            sb.append("    comment: {startsWith: \"")
+                    .append(escapeJavaString(lineCommentPrefix[0])).append("\"}\n");
+        }
+        sb.append("    contains: [\n");
+        for (String rule : ruleLines) {
+            sb.append("        ").append(rule).append('\n');
+        }
+        sb.append("    ]\n}\n");
+        return sb.toString();
+    }
+
+    private static void collectMtsxRules(
+            @Nullable JSONArray patterns,
+            @Nullable JSONObject repo,
+            Set<String> visitedIncludes,
+            List<String> out,
+            String[] lineCommentPrefix) {
+        if (patterns == null) return;
+        for (int i = 0; i < patterns.length(); i++) {
+            JSONObject obj = patterns.optJSONObject(i);
+            if (obj == null) continue;
+            String include = obj.optString("include", "");
+            if (include.startsWith("#")) {
+                String key = include.substring(1);
+                if (repo != null && visitedIncludes.add(key)) {
+                    JSONObject ref = repo.optJSONObject(key);
+                    if (ref != null) {
+                        JSONArray sub = new JSONArray();
+                        sub.put(ref);
+                        collectMtsxRules(sub, repo, visitedIncludes, out, lineCommentPrefix);
+                    }
+                }
+                continue;
+            }
+            JSONArray nested = obj.optJSONArray("patterns");
+            if (nested != null && !obj.has("match") && !obj.has("begin")) {
+                collectMtsxRules(nested, repo, visitedIncludes, out, lineCommentPrefix);
+                continue;
+            }
+            String match = obj.optString("match", "");
+            String scopeName = obj.optString("name", "");
+            if (!match.isEmpty()) {
+                if (lineCommentPrefix[0] == null && scopeName.contains("comment.line")) {
+                    String prefix = inferLineCommentPrefix(match);
+                    if (prefix != null) lineCommentPrefix[0] = prefix;
+                }
+                StringBuilder rule = new StringBuilder("{match: ");
+                rule.append(formatMtsxRegex(match));
+                JSONObject captures = obj.optJSONObject("captures");
+                if (captures != null && captures.length() > 0) {
+                    java.util.Iterator<String> capKeys = captures.keys();
+                    while (capKeys.hasNext()) {
+                        String group = capKeys.next();
+                        JSONObject cap = captures.optJSONObject(group);
+                        String capScope = cap != null ? cap.optString("name", scopeName) : scopeName;
+                        rule.append(", ").append(group).append(": \"")
+                                .append(reverseMapTextMateScopeToMtColor(capScope)).append('"');
+                    }
+                } else {
+                    rule.append(", 0: \"").append(reverseMapTextMateScopeToMtColor(scopeName)).append('"');
+                }
+                rule.append('}');
+                out.add(rule.toString());
+            } else {
+                String begin = obj.optString("begin", "");
+                String end = obj.optString("end", "");
+                if (!begin.isEmpty() && !end.isEmpty()) {
+                    out.add("{start: {match: " + formatMtsxRegex(begin)
+                            + "}, end: {match: " + formatMtsxRegex(end)
+                            + "}, color: \"" + reverseMapTextMateScopeToMtColor(scopeName) + "\"}");
+                }
+            }
+        }
+    }
+
+    private static String formatMtsxRegex(String regex) {
+        if (!regex.contains("\n") && !regex.contains("\r")) {
+            return "/" + regex.replace("/", "\\/") + "/";
+        }
+        return "\"" + escapeJavaString(regex) + "\"";
+    }
+
+    @Nullable
+    private static String inferLineCommentPrefix(String match) {
+        String clean = match.replace("\\s*", "").replace("^[ \\t]*", "").replace("^", "");
+        for (String candidate : new String[]{"//", "#", "--", ";"}) {
+            if (clean.startsWith(candidate) || clean.startsWith(Pattern.quote(candidate))) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static String reverseMapTextMateScopeToMtColor(@Nullable String scope) {
+        if (scope == null || scope.isEmpty()) return "default";
+        String s = scope.toLowerCase(Locale.ROOT);
+        if (s.contains("comment")) return "comment";
+        if (s.contains("string")) return "string";
+        if (s.contains("numeric")) return "number";
+        if (s.contains("operator")) return "operator";
+        if (s.contains("label")) return "label";
+        if (s.contains("variable")) return "variable";
+        if (s.contains("type") || s.contains("tag")) return "type";
+        if (s.contains("keyword.control")) return "keyword2";
+        if (s.contains("keyword") || s.contains("storage")) return "keyword";
+        return "default";
+    }
+
+    private static String escapeJavaString(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
 
     private static String stripExtension(String name) {

@@ -18,19 +18,26 @@ import android.os.Looper;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.ProgressBar;
+import android.widget.RadioButton;
 import android.widget.TextView;
 
 import io.github.abdurazaaqmohammed.feature.editor.ColorPreviewHelper;
 import io.github.abdurazaaqmohammed.feature.editor.ColorPreviewLanguageWrapper;
+import io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager;
 import io.github.abdurazaaqmohammed.feature.editor.SyntaxApplyPolicy;
 import io.github.abdurazaaqmohammed.feature.apk.ArscTextActivity;
 import io.github.abdurazaaqmohammed.ui.common.theme.ThemePackEditorColors;
@@ -39,9 +46,11 @@ import io.github.abdurazaaqmohammed.ui.editor.EditorSettingsActivity;
 import io.github.abdurazaaqmohammed.util.io.CopyUtil;
 import io.github.codehasan.colorpicker.extensions.Extensions;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import android.view.inputmethod.InputMethodManager;
@@ -154,6 +163,42 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
                     }
                 } catch (Exception ignored) {
                 }
+            });
+    private String pendingExportSyntaxScope;
+    private String pendingExportSyntaxLabel;
+    private boolean pendingExportSyntaxCustom;
+    private boolean pendingExportAsMtsx;
+    private final ActivityResultLauncher<Intent> syntaxExportLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result == null || result.getResultCode() != Activity.RESULT_OK
+                        || result.getData() == null || result.getData().getData() == null) {
+                    return;
+                }
+                Context ctx = getContext();
+                if (ctx == null || pendingExportSyntaxScope == null) return;
+                final Context appContext = ctx.getApplicationContext();
+                final String scope = pendingExportSyntaxScope;
+                final String label = pendingExportSyntaxLabel != null ? pendingExportSyntaxLabel : scope;
+                final boolean isCustom = pendingExportSyntaxCustom;
+                final boolean asMtsx = pendingExportAsMtsx;
+                final android.net.Uri destUri = result.getData().getData();
+                AppExecutors.io().execute(() -> {
+                    boolean ok = false;
+                    try {
+                        io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.exportSyntaxToUri(
+                                appContext, scope, label, isCustom, asMtsx, destUri);
+                        ok = true;
+                    } catch (Exception e) {
+                        Log.e("UnifiedEditor", "Syntax export failed", e);
+                    }
+                    final boolean success = ok;
+                    Activity act = getActivity();
+                    if (act != null && !act.isFinishing() && !act.isDestroyed()) {
+                        AppExecutors.runOnUiIfAlive(act, () -> Extensions.showMessage(act,
+                                success ? getString(R.string.syntax_exported, label)
+                                        : getString(R.string.syntax_export_failed)));
+                    }
+                });
             });
     private LinearLayout searchPanel, replacePanel, linearHeader;
     private SymbolDrawerView symbolInputView;
@@ -734,7 +779,11 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
             try {
                 String targetScope = syntaxPolicy.currentGeneration() > 0
                         ? syntaxPolicy.requestedScope()
-                        : "source.smali";
+                        : (getContext() != null
+                                && io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager
+                                        .isBuiltInHidden(getContext(), "Smali")
+                                ? null
+                                : "source.smali");
                 if (targetScope == null) {
                     Language plain = new EmptyLanguage();
                     editor.setEditorLanguage(plain);
@@ -1624,39 +1673,281 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
         popupMenu.show();
     }
 
-    public void showSyntaxDialog() {
-        List<io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.CustomSyntaxInfo> customList =
-                io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.listCustomSyntaxes(requireContext());
-        String[] labels = new String[SYNTAX_LABELS.length + customList.size()];
-        String[] scopes = new String[SYNTAX_SCOPES.length + customList.size()];
-        System.arraycopy(SYNTAX_LABELS, 0, labels, 0, SYNTAX_LABELS.length);
-        System.arraycopy(SYNTAX_SCOPES, 0, scopes, 0, SYNTAX_SCOPES.length);
-        for (int i = 0; i < customList.size(); i++) {
-            io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.CustomSyntaxInfo info = customList.get(i);
-            labels[SYNTAX_LABELS.length + i] = info.displayName;
-            scopes[SYNTAX_SCOPES.length + i] = info.scopeName;
+    private static final class SyntaxEntry {
+        final String label;
+        @Nullable final String scope;
+        final boolean custom;
+
+        SyntaxEntry(@NonNull String label, @Nullable String scope, boolean custom) {
+            this.label = label;
+            this.scope = scope;
+            this.custom = custom;
         }
-        new MaterialAlertDialogBuilder(requireContext())
+    }
+
+    private static final class SyntaxRowHolder {
+        final RadioButton radio;
+        final ImageButton btnExport;
+        final ImageButton btnDelete;
+
+        SyntaxRowHolder(RadioButton radio, ImageButton btnExport, ImageButton btnDelete) {
+            this.radio = radio;
+            this.btnExport = btnExport;
+            this.btnDelete = btnDelete;
+        }
+    }
+
+    public void showSyntaxDialog() {
+        Context ctx = requireContext();
+        List<SyntaxEntry> entries = buildVisibleSyntaxEntries(ctx);
+        String activeScope = currentEffectiveScope(ctx);
+        final int[] selectedIndex = { indexOfSyntaxScope(entries, activeScope) };
+        final AlertDialog[] hostDialog = new AlertDialog[1];
+
+        ArrayAdapter<SyntaxEntry> adapter = new ArrayAdapter<SyntaxEntry>(ctx, 0, entries) {
+            @NonNull
+            @Override
+            public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+                Context itemCtx = parent.getContext();
+                LinearLayout row;
+                SyntaxRowHolder holder;
+                if (convertView instanceof LinearLayout && convertView.getTag() instanceof SyntaxRowHolder) {
+                    row = (LinearLayout) convertView;
+                    holder = (SyntaxRowHolder) convertView.getTag();
+                } else {
+                    row = new LinearLayout(itemCtx);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    row.setGravity(Gravity.CENTER_VERTICAL);
+                    row.setPaddingRelative(dpToPx(itemCtx, 16), dpToPx(itemCtx, 4),
+                            dpToPx(itemCtx, 8), dpToPx(itemCtx, 4));
+                    row.setMinimumHeight(dpToPx(itemCtx, 48));
+                    int rowBg = resolveThemeResource(itemCtx, android.R.attr.selectableItemBackground);
+                    if (rowBg != 0) row.setBackgroundResource(rowBg);
+
+                    RadioButton radio = new RadioButton(itemCtx);
+                    radio.setLayoutParams(new LinearLayout.LayoutParams(
+                            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                    radio.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+                    radio.setTextColor(resolveThemeColor(itemCtx, android.R.attr.textColorPrimary, 0xFF000000));
+                    radio.setClickable(false);
+                    radio.setFocusable(false);
+                    radio.setFocusableInTouchMode(false);
+                    radio.setBackground(null);
+
+                    int iconColor = resolveThemeColor(itemCtx, android.R.attr.textColorSecondary, 0xFF757575);
+                    int borderlessBg = resolveThemeResource(
+                            itemCtx, android.R.attr.selectableItemBackgroundBorderless);
+                    ImageButton btnExport = createSyntaxActionButton(
+                            itemCtx, R.drawable.save_24px, R.string.syntax_export, iconColor, borderlessBg);
+                    ImageButton btnDelete = createSyntaxActionButton(
+                            itemCtx, R.drawable.baseline_delete_24, R.string.syntax_delete, iconColor, borderlessBg);
+
+                    row.addView(radio);
+                    row.addView(btnExport);
+                    row.addView(btnDelete);
+                    holder = new SyntaxRowHolder(radio, btnExport, btnDelete);
+                    row.setTag(holder);
+                }
+
+                SyntaxEntry entry = getItem(position);
+                if (entry == null) return row;
+
+                holder.radio.setText(entry.label);
+                holder.radio.setChecked(position == selectedIndex[0]);
+                int actionVisibility = entry.scope != null ? View.VISIBLE : View.GONE;
+                holder.btnExport.setVisibility(actionVisibility);
+                holder.btnDelete.setVisibility(actionVisibility);
+
+                row.setOnClickListener(v -> {
+                    selectedIndex[0] = position;
+                    if (hostDialog[0] != null) hostDialog[0].dismiss();
+                    applySyntax(entry.scope);
+                    if (getActivity() != null) {
+                        Extensions.showMessage(requireActivity(),
+                                getString(R.string.syntax_set_to, entry.label));
+                    }
+                });
+                holder.btnExport.setOnClickListener(v -> showExportFormatDialog(entry));
+                holder.btnDelete.setOnClickListener(v ->
+                        confirmDeleteSyntax(entry, entries, selectedIndex, this));
+                return row;
+            }
+        };
+
+        hostDialog[0] = new MaterialAlertDialogBuilder(ctx)
                 .setTitle(R.string.choose_syntax)
-                .setSingleChoiceItems(labels, currentSyntaxIndex(scopes), (dialog, which) -> {
-                    dialog.dismiss();
-                    applySyntax(scopes[which]);
-                    Extensions.showMessage(requireActivity(),
-                            getString(R.string.syntax_set_to, labels[which]));
-                })
+                .setAdapter(adapter, null)
+                .setNegativeButton(R.string.close, null)
                 .show();
     }
 
-    private int currentSyntaxIndex(String[] scopes) {
-        String scope = (syntaxPolicy.currentGeneration() == 0 && isSmali)
-                ? "source.smali"
-                : syntaxPolicy.requestedScope();
-        if (scope != null) {
-            for (int i = 0; i < scopes.length; i++) {
-                if (scope.equals(scopes[i])) return i;
+    private ImageButton createSyntaxActionButton(@NonNull Context context, int iconRes,
+            int contentDescRes, int iconColor, int borderlessBgRes) {
+        int size = dpToPx(context, 40);
+        int pad = dpToPx(context, 8);
+        ImageButton button = new ImageButton(context);
+        button.setLayoutParams(new LinearLayout.LayoutParams(size, size));
+        button.setPadding(pad, pad, pad, pad);
+        button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        button.setImageResource(iconRes);
+        button.setColorFilter(iconColor);
+        button.setContentDescription(getString(contentDescRes));
+        button.setFocusable(false);
+        if (borderlessBgRes != 0) button.setBackgroundResource(borderlessBgRes);
+        return button;
+    }
+
+    private void showExportFormatDialog(@NonNull SyntaxEntry entry) {
+        if (entry.scope == null) return;
+        String[] formats = {
+                getString(R.string.syntax_export_format_json),
+                getString(R.string.syntax_export_format_mtsx)
+        };
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.syntax_export_format_title)
+                .setItems(formats, (dialog, which) -> launchSyntaxExport(entry, which == 1))
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void launchSyntaxExport(@NonNull SyntaxEntry entry, boolean asMtsx) {
+        if (entry.scope == null) return;
+        pendingExportSyntaxScope = entry.scope;
+        pendingExportSyntaxLabel = entry.label;
+        pendingExportSyntaxCustom = entry.custom;
+        pendingExportAsMtsx = asMtsx;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/octet-stream");
+        intent.putExtra(Intent.EXTRA_TITLE,
+                CustomSyntaxManager.suggestedExportFileName(entry.label, asMtsx));
+        try {
+            syntaxExportLauncher.launch(intent);
+        } catch (Exception e) {
+            Log.e("UnifiedEditor", "Failed to launch syntax export picker", e);
+            if (getActivity() != null) {
+                Extensions.showMessage(requireActivity(), getString(R.string.syntax_export_failed));
             }
         }
+    }
+
+    private void confirmDeleteSyntax(@NonNull SyntaxEntry entry, @NonNull List<SyntaxEntry> entries,
+            @NonNull int[] selectedIndex, @NonNull ArrayAdapter<SyntaxEntry> adapter) {
+        if (entry.scope == null) return;
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.syntax_delete)
+                .setMessage(getString(R.string.syntax_delete_confirm, entry.label))
+                .setPositiveButton(R.string.syntax_delete, (dialog, which) ->
+                        performDeleteSyntax(entry, entries, selectedIndex, adapter))
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void performDeleteSyntax(@NonNull SyntaxEntry entry, @NonNull List<SyntaxEntry> entries,
+            @NonNull int[] selectedIndex, @NonNull ArrayAdapter<SyntaxEntry> adapter) {
+        Context ctx = getContext();
+        if (ctx == null || entry.scope == null) return;
+        if (entry.custom) {
+            CustomSyntaxManager.deleteCustomSyntax(ctx, entry.scope);
+        } else {
+            CustomSyntaxManager.hideBuiltInSyntax(ctx, entry.label);
+        }
+        String currentScope = currentEffectiveScope(ctx);
+        boolean deletedWasActive = entry.scope.equals(currentScope);
+        entries.remove(entry);
+        if (deletedWasActive) {
+            String nextScope = hasSyntaxScope(entries, entry.scope)
+                    ? entry.scope
+                    : resolveFallbackScopeAfterDelete(ctx, entry.scope);
+            syntaxPolicy.onViewDestroyed();
+            applySyntax(nextScope);
+            selectedIndex[0] = indexOfSyntaxScope(entries, nextScope);
+        } else {
+            selectedIndex[0] = indexOfSyntaxScope(entries, currentScope);
+        }
+        adapter.notifyDataSetChanged();
+        if (getActivity() != null) {
+            Extensions.showMessage(requireActivity(), getString(R.string.syntax_deleted, entry.label));
+        }
+    }
+
+    @NonNull
+    private static List<SyntaxEntry> buildVisibleSyntaxEntries(@NonNull Context context) {
+        List<SyntaxEntry> entries = new ArrayList<>();
+        entries.add(new SyntaxEntry(SYNTAX_LABELS[0], SYNTAX_SCOPES[0], false));
+        for (int i = 1; i < SYNTAX_LABELS.length; i++) {
+            if (!CustomSyntaxManager.isBuiltInHidden(context, SYNTAX_LABELS[i])) {
+                entries.add(new SyntaxEntry(SYNTAX_LABELS[i], SYNTAX_SCOPES[i], false));
+            }
+        }
+        List<CustomSyntaxManager.CustomSyntaxInfo> customList = CustomSyntaxManager.listCustomSyntaxes(context);
+        for (CustomSyntaxManager.CustomSyntaxInfo info : customList) {
+            entries.add(new SyntaxEntry(info.displayName, info.scopeName, true));
+        }
+        return entries;
+    }
+
+    @Nullable
+    private String currentEffectiveScope(@NonNull Context context) {
+        if (syntaxPolicy.currentGeneration() == 0 && isSmali) {
+            return CustomSyntaxManager.isBuiltInHidden(context, "Smali") ? null : "source.smali";
+        }
+        return syntaxPolicy.requestedScope();
+    }
+
+    private static int indexOfSyntaxScope(@NonNull List<SyntaxEntry> entries, @Nullable String scope) {
+        if (scope == null) return 0;
+        for (int i = 0; i < entries.size(); i++) {
+            if (scope.equals(entries.get(i).scope)) return i;
+        }
         return 0;
+    }
+
+    private static boolean hasSyntaxScope(@NonNull List<SyntaxEntry> entries, @NonNull String scope) {
+        for (SyntaxEntry entry : entries) {
+            if (scope.equals(entry.scope)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isBuiltInScopeVisible(@NonNull Context context, @Nullable String scope) {
+        if (scope == null) return true;
+        for (int i = 1; i < SYNTAX_LABELS.length; i++) {
+            if (scope.equals(SYNTAX_SCOPES[i])
+                    && !CustomSyntaxManager.isBuiltInHidden(context, SYNTAX_LABELS[i])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nullable
+    private String resolveFallbackScopeAfterDelete(@NonNull Context context, @NonNull String deletedScope) {
+        if (isSmali) {
+            return CustomSyntaxManager.isBuiltInHidden(context, "Smali") ? null : "source.smali";
+        }
+        String fallback = resolveAutoScope();
+        return deletedScope.equals(fallback) ? null : fallback;
+    }
+
+    private static int dpToPx(@NonNull Context context, int dp) {
+        return Math.round(dp * context.getResources().getDisplayMetrics().density);
+    }
+
+    private static int resolveThemeResource(@NonNull Context context, int attr) {
+        TypedValue tv = new TypedValue();
+        return context.getTheme().resolveAttribute(attr, tv, true) ? tv.resourceId : 0;
+    }
+
+    private static int resolveThemeColor(@NonNull Context context, int attr, int fallback) {
+        TypedValue tv = new TypedValue();
+        if (context.getTheme().resolveAttribute(attr, tv, true)) {
+            if (tv.resourceId != 0) {
+                return ContextCompat.getColor(context, tv.resourceId);
+            }
+            return tv.data;
+        }
+        return fallback;
     }
 
     /** Sets the real file name used to auto-detect the syntax, then re-applies it. */
@@ -1669,11 +1960,22 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
     public void applyAutoSyntax() {
         if (isSmali) return;
         if (largeFileMode) { applySyntax(null); return; }
+        applySyntax(resolveAutoScope());
+    }
+
+    @Nullable
+    private String resolveAutoScope() {
+        Context ctx = getContext();
         String targetName = fileName != null ? fileName : title;
-        String customScope = getContext() != null
-                ? io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.findScopeForFileName(getContext(), targetName)
+        if (axml) {
+            return (ctx == null || isBuiltInScopeVisible(ctx, "text.xml")) ? "text.xml" : null;
+        }
+        String customScope = ctx != null
+                ? CustomSyntaxManager.findScopeForFileName(ctx, targetName)
                 : null;
-        applySyntax(axml ? "text.xml" : (customScope != null ? customScope : detectScope(targetName)));
+        if (customScope != null) return customScope;
+        String builtIn = detectScope(targetName);
+        return (builtIn != null && (ctx == null || isBuiltInScopeVisible(ctx, builtIn))) ? builtIn : null;
     }
 
     private static String detectScope(String name) {
