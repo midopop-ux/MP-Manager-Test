@@ -144,7 +144,7 @@ public class DexBrowserActivity extends BaseActivity {
             for (DexAnalyzer.ClassInfo info : report.classes) {
                 if (q.isEmpty() || info.type.toLowerCase(Locale.ROOT).contains(q)) {
                     filtered.add(info);
-                    adapter.add(info.type + "  ·  " + info.methods + "m / " + info.fields + "f");
+                    adapter.add(getString(R.string.dex_browser_item, info.type, info.methods, info.fields));
                 }
             }
         }
@@ -175,17 +175,17 @@ public class DexBrowserActivity extends BaseActivity {
                 body.setTextIsSelectable(true);
                 body.setPadding(dp(18), dp(8), dp(18), dp(8));
                 StringBuilder sb = new StringBuilder();
-                sb.append("DEX: ").append(detail.dex).append('\n');
-                sb.append("Super: ").append(detail.superType).append('\n');
+                sb.append(getString(R.string.dex_browser_detail_dex, detail.dex)).append('\n');
+                sb.append(getString(R.string.dex_browser_detail_super, detail.superType)).append('\n');
                 if (!detail.interfaces.isEmpty()) {
-                    sb.append("Interfaces:\n");
+                    sb.append(getString(R.string.dex_browser_detail_interfaces)).append('\n');
                     for (String iface : detail.interfaces) sb.append("  ").append(iface).append('\n');
                 }
-                sb.append("\nMethods (").append(detail.methods.size()).append("):\n");
+                sb.append('\n').append(getString(R.string.dex_browser_detail_methods, detail.methods.size())).append('\n');
                 int methodLimit = Math.min(detail.methods.size(), 500);
                 for (int i = 0; i < methodLimit; i++) sb.append("  ").append(detail.methods.get(i)).append('\n');
                 if (detail.methods.size() > methodLimit) sb.append("  …\n");
-                sb.append("\nFields (").append(detail.fields.size()).append("):\n");
+                sb.append('\n').append(getString(R.string.dex_browser_detail_fields, detail.fields.size())).append('\n');
                 int fieldLimit = Math.min(detail.fields.size(), 300);
                 for (int i = 0; i < fieldLimit; i++) sb.append("  ").append(detail.fields.get(i)).append('\n');
                 if (detail.fields.size() > fieldLimit) sb.append("  …\n");

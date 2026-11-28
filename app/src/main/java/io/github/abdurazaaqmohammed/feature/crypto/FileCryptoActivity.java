@@ -342,27 +342,30 @@ public class FileCryptoActivity extends BaseActivity {
             try {
                 setSource(copyUriToCache(uri), "");
             } catch (Exception e) {
-                toast("Failed to open file: " + e.getMessage());
+                toast(getString(R.string.crypto_open_file_failed, e.getMessage()));
             }
         } else if (requestCode == REQ_DIR) {
             File dir = treeUriToFile(uri);
             if (dir != null && dir.isDirectory()) {
                 setSource(dir, "");
             } else {
-                toast("Failed to convert folder to readable path.");
+                toast(getString(R.string.crypto_folder_path_failed));
             }
         }
     }
 
     private File copyUriToCache(Uri uri) throws Exception {
         String name = displayName(uri);
-        if (name == null || name.isEmpty()) name = "selected_" + System.currentTimeMillis() + ".bin";
+        if (name != null) name = new File(name.replace('\\', '/')).getName();
+        if (name == null || name.isEmpty() || ".".equals(name) || "..".equals(name)) {
+            name = "selected_" + System.currentTimeMillis() + ".bin";
+        }
         File dir = new File(getCacheDir(), "crypto_source");
-        if (!dir.exists() && !dir.mkdirs()) throw new Exception("Failed to create temporary folder.");
+        if (!dir.exists() && !dir.mkdirs()) throw new Exception(getString(R.string.crypto_temp_dir_failed));
         File out = new File(dir, name);
         try (InputStream in = getContentResolver().openInputStream(uri);
              FileOutputStream fos = new FileOutputStream(out)) {
-            if (in == null) throw new Exception("Source is unreadable.");
+            if (in == null) throw new Exception(getString(R.string.crypto_source_unreadable));
             byte[] buf = new byte[16384];
             int n;
             while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
@@ -410,12 +413,12 @@ public class FileCryptoActivity extends BaseActivity {
             labels[i] = pm.getApplicationLabel(usable.get(i)) + "\n" + usable.get(i).packageName;
         }
         new AlertDialog.Builder(this)
-                .setTitle("Select an installed app")
+                .setTitle(R.string.crypto_pick_app_title)
                 .setItems(labels, (d, which) -> {
                     ApplicationInfo info = usable.get(which);
                     setSource(new File(info.sourceDir), info.packageName);
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.cancel, null)
                 .show();
     }
 
@@ -427,20 +430,20 @@ public class FileCryptoActivity extends BaseActivity {
         adapter.clear();
         adapter.notifyDataSetChanged();
         detailText.setText(getString(R.string.crypto_no_selection));
-        sourceInfo.setText("Source: " + file.getName() + "\n" + file.getAbsolutePath()
+        sourceInfo.setText(getString(R.string.crypto_source) + ": " + file.getName() + "\n" + file.getAbsolutePath()
                 + (label == null || label.isEmpty() ? "" : "\n" + label));
-        statusText.setText("Ready to scan.");
+        statusText.setText(R.string.crypto_ready_scan);
         scanSource();
     }
 
     private void scanSource() {
         if (source == null || !source.exists()) {
-            toast("Select a file or folder first.");
+            toast(getString(R.string.crypto_select_source_first));
             return;
         }
         progress.setVisibility(View.VISIBLE);
         progress.setIndeterminate(true);
-        statusText.setText("Scanning...");
+        statusText.setText(R.string.crypto_scanning);
         File target = source;
         boolean includeAll = allBox.isChecked();
         AppExecutors.io().execute(() -> {
@@ -457,14 +460,13 @@ public class FileCryptoActivity extends BaseActivity {
                             + "  ·  " + f.path);
                 }
                 adapter.notifyDataSetChanged();
-                statusText.setText("Found " + findings.size()
-                        + " results. Suspicious and encrypted shown by default.");
+                statusText.setText(getString(R.string.crypto_scan_found, findings.size()));
                 if (!findings.isEmpty()) {
                     selected = findings.get(0);
                     showDetails(selected);
                 } else {
                     selected = null;
-                    detailText.setText("No matching results. Try enabling show all or scan another source.");
+                    detailText.setText(R.string.crypto_scan_empty);
                 }
             });
         });
@@ -473,35 +475,35 @@ public class FileCryptoActivity extends BaseActivity {
     private void showDetails(FileCryptoEngine.Finding f) {
         if (f == null) return;
         StringBuilder sb = new StringBuilder();
-        sb.append("Name: ").append(f.name).append('\n');
-        sb.append("Path: ").append(f.path).append('\n');
-        if (!f.container.isEmpty()) sb.append("Container: ").append(f.container).append('\n');
-        sb.append("Size: ").append(FileCryptoEngine.formatSize(f.size)).append('\n');
-        sb.append("Detected type: ").append(f.type).append('\n');
-        sb.append("Classification: ").append(kindLabel(f.kind)).append('\n');
-        sb.append("Status: ").append(f.status).append('\n');
-        if (!f.encoding.isEmpty()) sb.append("Encoding: ").append(f.encoding).append('\n');
-        if (!f.cipher.isEmpty()) sb.append("Likely cipher: ").append(f.cipher).append('\n');
-        sb.append("Entropy: ").append(String.format(java.util.Locale.US, "%.2f", f.entropy))
-                .append("/8.0  ·  Confidence: ").append(f.confidence).append("%\n");
+        sb.append(getString(R.string.crypto_field_name)).append(": ").append(f.name).append('\n');
+        sb.append(getString(R.string.crypto_field_path)).append(": ").append(f.path).append('\n');
+        if (!f.container.isEmpty()) sb.append(getString(R.string.crypto_field_container)).append(": ").append(f.container).append('\n');
+        sb.append(getString(R.string.crypto_field_size)).append(": ").append(FileCryptoEngine.formatSize(f.size)).append('\n');
+        sb.append(getString(R.string.crypto_field_type)).append(": ").append(f.type).append('\n');
+        sb.append(getString(R.string.crypto_field_classification)).append(": ").append(kindLabel(f.kind)).append('\n');
+        sb.append(getString(R.string.crypto_field_status)).append(": ").append(f.status).append('\n');
+        if (!f.encoding.isEmpty()) sb.append(getString(R.string.crypto_field_encoding)).append(": ").append(f.encoding).append('\n');
+        if (!f.cipher.isEmpty()) sb.append(getString(R.string.crypto_field_cipher)).append(": ").append(f.cipher).append('\n');
+        sb.append(getString(R.string.crypto_field_entropy)).append(": ").append(String.format(java.util.Locale.US, "%.2f", f.entropy))
+                .append("/8.0  ·  ").append(getString(R.string.crypto_field_confidence)).append(": ").append(f.confidence).append("%\n");
         if (!f.detail.isEmpty()) sb.append('\n').append(f.detail);
         if (f.needsKey || f.encrypted) {
-            sb.append("\n\nNote: Real encryption cannot be decrypted without the correct key or password.");
+            sb.append("\n\n").append(getString(R.string.crypto_details_key_note));
         }
         detailText.setText(sb.toString());
-        keyStatus.setText(f.zipEncrypted ? "This is an encrypted ZIP entry; password required."
-                : f.needsKey ? "This file requires a key or additional information."
-                : "Auto-decoding or key entry can be attempted.");
+        keyStatus.setText(f.zipEncrypted ? R.string.crypto_status_zip_encrypted
+                : f.needsKey ? R.string.crypto_status_needs_key
+                : R.string.crypto_status_ready_decode);
     }
 
     private String kindLabel(FileCryptoEngine.Kind kind) {
-        if (kind == FileCryptoEngine.Kind.TEXT) return "Text";
-        if (kind == FileCryptoEngine.Kind.ENCODING) return "Encoding/Transform";
-        if (kind == FileCryptoEngine.Kind.COMPRESSION) return "Compression";
-        if (kind == FileCryptoEngine.Kind.ENCRYPTION) return "Encryption";
-        if (kind == FileCryptoEngine.Kind.ARCHIVE) return "Archive";
-        if (kind == FileCryptoEngine.Kind.BINARY) return "Binary";
-        return "Unknown";
+        if (kind == FileCryptoEngine.Kind.TEXT) return getString(R.string.crypto_kind_text);
+        if (kind == FileCryptoEngine.Kind.ENCODING) return getString(R.string.crypto_kind_encoding);
+        if (kind == FileCryptoEngine.Kind.COMPRESSION) return getString(R.string.crypto_kind_compression);
+        if (kind == FileCryptoEngine.Kind.ENCRYPTION) return getString(R.string.crypto_kind_encryption);
+        if (kind == FileCryptoEngine.Kind.ARCHIVE) return getString(R.string.crypto_kind_archive);
+        if (kind == FileCryptoEngine.Kind.BINARY) return getString(R.string.crypto_kind_binary);
+        return getString(R.string.crypto_kind_unknown);
     }
 
     private void previewSelected() {
@@ -517,12 +519,12 @@ public class FileCryptoActivity extends BaseActivity {
                 byte[] data = readFinding(f);
                 AppExecutors.runOnUiIfAlive(this, () -> {
                     progress.setVisibility(View.GONE);
-                    showPreview("Before decode: " + f.name, data);
+                    showPreview(getString(R.string.crypto_preview_before, f.name), data);
                 });
             } catch (Exception e) {
                 AppExecutors.runOnUiIfAlive(this, () -> {
                     progress.setVisibility(View.GONE);
-                    toast("Failed to read content: " + e.getMessage());
+                    toast(getString(R.string.crypto_read_failed, e.getMessage()));
                 });
             }
         });
@@ -539,7 +541,7 @@ public class FileCryptoActivity extends BaseActivity {
                     }
                 }
             }
-            throw new Exception("Entry not found in archive.");
+            throw new Exception(getString(R.string.crypto_entry_not_found));
         }
         return FileCryptoEngine.readFile(new File(f.path));
     }
@@ -557,7 +559,7 @@ public class FileCryptoActivity extends BaseActivity {
                 .putString("iv", iv).apply();
         progress.setVisibility(View.VISIBLE);
         progress.setIndeterminate(true);
-        statusText.setText("Decoding " + f.name + "...");
+        statusText.setText(getString(R.string.crypto_decoding_item, f.name));
         AppExecutors.io().execute(() -> {
             try {
                 byte[] data = f.zipEncrypted ? null : readFinding(f);
@@ -566,22 +568,24 @@ public class FileCryptoActivity extends BaseActivity {
                     progress.setVisibility(View.GONE);
                     if (r.success) {
                         lastResult = r;
-                        statusText.setText("Method: " + r.method + (r.uncertain ? " (heuristic)" : ""));
-                        showPreview("After decode: " + f.name, r.data);
+                        statusText.setText(getString(r.uncertain
+                                ? R.string.crypto_method_applied_heuristic
+                                : R.string.crypto_method_applied, r.method));
+                        showPreview(getString(R.string.crypto_preview_after, f.name), r.data);
                     } else {
-                        statusText.setText(r.needsKey ? "Requires key/password."
-                                : "No valid decoding produced.");
+                        statusText.setText(r.needsKey ? R.string.crypto_decode_requires_key
+                                : R.string.crypto_decode_no_valid);
                         new AlertDialog.Builder(this)
-                                .setTitle("Decode Result")
-                                .setMessage(r.message + "\n\nOperation was not considered successful.")
-                                .setPositiveButton("OK", null)
+                                .setTitle(R.string.crypto_decode_result_title)
+                                .setMessage(getString(R.string.crypto_decode_failed_note, r.message))
+                                .setPositiveButton(android.R.string.ok, null)
                                 .show();
                     }
                 });
             } catch (Exception e) {
                 AppExecutors.runOnUiIfAlive(this, () -> {
                     progress.setVisibility(View.GONE);
-                    statusText.setText("Failed to decode: " + e.getMessage());
+                    statusText.setText(getString(R.string.crypto_decode_failed, e.getMessage()));
                 });
             }
         });
@@ -589,7 +593,7 @@ public class FileCryptoActivity extends BaseActivity {
 
     private void decryptAll() {
         if (findings.isEmpty()) {
-            toast("No results. Scan source first.");
+            toast(getString(R.string.crypto_no_results_scan));
             return;
         }
         String password = passwordInput.getText().toString();
@@ -597,7 +601,7 @@ public class FileCryptoActivity extends BaseActivity {
         String iv = ivInput.getText().toString();
         File outDir = new File(outputInput.getText().toString().trim());
         if (!outDir.exists() && !outDir.mkdirs()) {
-            toast("Failed to create output directory.");
+            toast(getString(R.string.crypto_output_dir_failed));
             return;
         }
         List<FileCryptoEngine.Finding> targets = new ArrayList<>(findings);
@@ -622,7 +626,7 @@ public class FileCryptoActivity extends BaseActivity {
                             lines.add("✔ " + f.name + " → " + r.method + " → " + saved.getName());
                         } else {
                             failed++;
-                            lines.add("✘ " + f.name + " -> Failed to save");
+                            lines.add("✘ " + f.name + " -> " + getString(R.string.crypto_failed_to_save_short));
                         }
                     } else {
                         failed++;
@@ -636,7 +640,7 @@ public class FileCryptoActivity extends BaseActivity {
                 final int done = i + 1;
                 AppExecutors.runOnUiIfAlive(this, () -> {
                     progress.setProgress(done);
-                    statusText.setText("Batch decoding: " + done + "/" + targets.size());
+                    statusText.setText(getString(R.string.crypto_batch_progress, done, targets.size()));
                 });
             }
             final int fOk = ok;
@@ -644,14 +648,14 @@ public class FileCryptoActivity extends BaseActivity {
             final int fKey = needKey;
             AppExecutors.runOnUiIfAlive(this, () -> {
                 progress.setVisibility(View.GONE);
-                statusText.setText("Batch completed: Succeeded " + fOk + " · Failed " + fFail
-                        + " · Needs key " + fKey + "\nFolder: " + outDir.getAbsolutePath());
+                statusText.setText(getString(R.string.crypto_batch_summary,
+                        fOk, fFail, fKey, outDir.getAbsolutePath()));
                 StringBuilder sb = new StringBuilder();
                 for (String line : lines) sb.append(line).append('\n');
                 new AlertDialog.Builder(this)
-                        .setTitle("Batch Decode Results")
-                        .setMessage(sb.length() == 0 ? "No results." : sb.toString())
-                        .setPositiveButton("OK", null)
+                        .setTitle(R.string.crypto_batch_results_title)
+                        .setMessage(sb.length() == 0 ? getString(R.string.crypto_no_results) : sb.toString())
+                        .setPositiveButton(android.R.string.ok, null)
                         .show();
             });
         });
@@ -690,7 +694,7 @@ public class FileCryptoActivity extends BaseActivity {
 
     private void showPreview(String title, byte[] data) {
         if (data == null) {
-            toast("No data to preview.");
+            toast(getString(R.string.crypto_no_preview_data));
             return;
         }
         LinearLayout box = new LinearLayout(this);
@@ -704,9 +708,10 @@ public class FileCryptoActivity extends BaseActivity {
             box.addView(image, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, dp(280)));
         }
-        TextView info = text("Type: " + FileCryptoEngine.detectType(data, "")
-                + " · Size: " + FileCryptoEngine.formatSize(data.length)
-                + " · SHA-256: " + FileCryptoEngine.sha256(data));
+        TextView info = text(getString(R.string.crypto_preview_meta,
+                FileCryptoEngine.detectType(data, ""),
+                FileCryptoEngine.formatSize(data.length),
+                FileCryptoEngine.sha256(data)));
         info.setTextIsSelectable(true);
         box.addView(info);
         TextView body = text(FileCryptoEngine.previewText(data, 20000));
@@ -720,12 +725,12 @@ public class FileCryptoActivity extends BaseActivity {
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(title)
                 .setView(box)
-                .setPositiveButton("Close", null)
-                .setNeutralButton("Copy Text", (d, w) -> {
+                .setPositiveButton(R.string.close, null)
+                .setNeutralButton(R.string.crypto_copy_text, (d, w) -> {
                     ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
                     cm.setPrimaryClip(ClipData.newPlainText("crypto-preview",
                             FileCryptoEngine.previewText(data, 20000)));
-                    toast("Content copied.");
+                    toast(getString(R.string.crypto_content_copied));
                 })
                 .create();
         dialog.show();
@@ -733,27 +738,27 @@ public class FileCryptoActivity extends BaseActivity {
 
     private void saveLastResult() {
         if (lastResult == null || lastResult.data == null) {
-            toast("No successful result to save.");
+            toast(getString(R.string.crypto_no_result_to_save));
             return;
         }
         File dir = new File(outputInput.getText().toString().trim());
         if (!dir.exists() && !dir.mkdirs()) {
-            toast("Failed to create save directory.");
+            toast(getString(R.string.crypto_output_dir_failed));
             return;
         }
         File saved = writeResult(selected, lastResult, dir);
         if (saved == null) {
-            toast("Failed to save result.");
+            toast(getString(R.string.crypto_save_fail_generic));
             return;
         }
-        statusText.setText("Saved to: " + saved.getAbsolutePath());
+        statusText.setText(getString(R.string.crypto_save_success, saved.getAbsolutePath()));
         try {
             Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", saved);
             Intent share = new Intent(Intent.ACTION_SEND);
             share.setType("application/octet-stream");
             share.putExtra(Intent.EXTRA_STREAM, uri);
             share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(share, "Share Result"));
+            startActivity(Intent.createChooser(share, getString(R.string.share)));
         } catch (Exception ignored) {
         }
     }
@@ -766,13 +771,13 @@ public class FileCryptoActivity extends BaseActivity {
         File archive = selected.archivePath != null && !selected.archivePath.isEmpty()
                 ? new File(selected.archivePath) : new File(selected.path);
         if (!archive.isFile() || !FileCryptoEngine.isZip(archive)) {
-            toast("Selected result is not a ZIP/APK archive.");
+            toast(getString(R.string.crypto_not_archive));
             return;
         }
         File outDir = new File(outputInput.getText().toString().trim(),
                 FileCryptoEngine.baseName(archive.getName()) + "_extracted");
         if (!outDir.exists() && !outDir.mkdirs()) {
-            toast("Failed to create extraction directory.");
+            toast(getString(R.string.crypto_extract_dir_failed));
             return;
         }
         String password = passwordInput.getText().toString();
@@ -782,13 +787,19 @@ public class FileCryptoActivity extends BaseActivity {
             int count = 0;
             String error = "";
             try {
+                String canonicalOut = outDir.getCanonicalPath();
+                if (!canonicalOut.endsWith(File.separator)) canonicalOut += File.separator;
                 net.lingala.zip4j.ZipFile z = new net.lingala.zip4j.ZipFile(archive);
                 if (password != null && !password.isEmpty()) z.setPassword(password.toCharArray());
                 for (net.lingala.zip4j.model.FileHeader h : z.getFileHeaders()) {
                     if (h.isDirectory()) continue;
                     String safe = h.getFileName().replace('\\', '/');
-                    while (safe.startsWith("/") || safe.startsWith("../")) safe = safe.substring(1);
+                    while (safe.startsWith("/")) safe = safe.substring(1);
+                    if (safe.isEmpty()) continue;
                     File target = new File(outDir, safe);
+                    if (!target.getCanonicalPath().startsWith(canonicalOut)) {
+                        throw new java.io.IOException(getString(R.string.crypto_extract_blocked_entry, h.getFileName()));
+                    }
                     File parent = target.getParentFile();
                     if (parent != null) parent.mkdirs();
                     try (InputStream in = z.getInputStream(h);
@@ -806,15 +817,12 @@ public class FileCryptoActivity extends BaseActivity {
             final String err = error;
             AppExecutors.runOnUiIfAlive(this, () -> {
                 progress.setVisibility(View.GONE);
-                statusText.setText(err.isEmpty()
-                        ? "Extracted " + extracted + " entries to " + outDir.getAbsolutePath()
-                        : "Extraction failed: " + err);
+                String successMsg = getString(R.string.crypto_extract_success, extracted, outDir.getAbsolutePath());
+                statusText.setText(err.isEmpty() ? successMsg : getString(R.string.crypto_extract_failed, err));
                 new AlertDialog.Builder(this)
-                        .setTitle("Archive Extraction")
-                        .setMessage(err.isEmpty()
-                                ? "Extracted " + extracted + " entries to:\n" + outDir.getAbsolutePath()
-                                : err)
-                        .setPositiveButton("OK", null)
+                        .setTitle(R.string.crypto_extract_title)
+                        .setMessage(err.isEmpty() ? successMsg : err)
+                        .setPositiveButton(android.R.string.ok, null)
                         .show();
             });
         });
