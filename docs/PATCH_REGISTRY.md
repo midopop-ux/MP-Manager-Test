@@ -10,7 +10,12 @@
 
 ## Pending / Unbuilt Commits & Offline Hot-Patches
 
-*(No pending commits currently. All commits up to `6593ffd5` have been built in CI Run `#46076049032`).*
+- `4340bf70`: Initial MT-style `.method` dark highlight & custom smali syntax hook in `UnifiedEditorFragment` (refined in `cc29e3c4`)
+- `1d3b7653`: Add `Smali` to `SYNTAX_LABELS`/`SYNTAX_SCOPES` and initial `currentSyntaxIndex` default (refined in `cc29e3c4`)
+- `bd6e20e5`: Remove `Unit-Test-Report` upload and `mapping.txt` from `.github/workflows/android.yml` (`MP-Manager-APK` uploads `.apk` only)
+- `4d39daac`: Enforce strict `WorkingMode` isolation in `AccessManager` (`canUseShizuku`, `fileOpsConfigured`, `shellCopyOn`, `needsShellAccess`, `dirSize`, `stageForRead`, `rootOpsEnabled`)
+- `f5f1b2b1`: Complete EN/AR localization in `FileCryptoActivity` & `DexBrowserActivity`, sanitize cached URIs, and harden Zip Slip canonical path check
+- `cc29e3c4`: Fix `SyntaxApplyPolicy` sync (`recordExternalApplied`), default `source.smali` & Plain Text preservation, apply `.mtsx` `.mtcolors` in per-editor `ThemeRegistry`, set `ThemeModel.setDark`, use adaptive `.method` burgundy tint from `WHOLE_BACKGROUND`, and update `dark.json` `keyword.css` to `#E06C75`
 
 ---
 
