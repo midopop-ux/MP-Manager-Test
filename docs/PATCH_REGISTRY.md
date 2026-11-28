@@ -3,19 +3,14 @@
 > **Active-only tracker:** Keeps only commits **not yet built in CI** and **offline hot-patches** applied to the device APK.
 > Once a commit is pushed **and** built by CI, move it to [PATCH_REGISTRY_ARCHIVE.md](./PATCH_REGISTRY_ARCHIVE.md).
 
-- **Latest Online CI Baseline:** Run `#46076049032` (`2026-11-27 22:30 UTC`, commit `6593ffd5`) -> see [PATCH_REGISTRY_ARCHIVE.md](./PATCH_REGISTRY_ARCHIVE.md).
+- **Latest Online CI Baseline:** Run `#46103338069` (`2026-11-28 03:40 UTC`, commit `a36e8ef8`) -> see [PATCH_REGISTRY_ARCHIVE.md](./PATCH_REGISTRY_ARCHIVE.md).
 - **ProGuard Mapping Location:** `/data/user/0/com.agy/files/.gemini/antigravity-app/scratch/mp_patch/mappings/latest-mapping.txt` (symlinked to `mapping-release-6593ffd5.txt`).
 
 ---
 
 ## Pending / Unbuilt Commits & Offline Hot-Patches
 
-- `4340bf70`: Initial MT-style `.method` dark highlight & custom smali syntax hook in `UnifiedEditorFragment` (refined in `cc29e3c4`)
-- `1d3b7653`: Add `Smali` to `SYNTAX_LABELS`/`SYNTAX_SCOPES` and initial `currentSyntaxIndex` default (refined in `cc29e3c4`)
-- `bd6e20e5`: Remove `Unit-Test-Report` upload and `mapping.txt` from `.github/workflows/android.yml` (`MP-Manager-APK` uploads `.apk` only)
-- `4d39daac`: Enforce strict `WorkingMode` isolation in `AccessManager` (`canUseShizuku`, `fileOpsConfigured`, `shellCopyOn`, `needsShellAccess`, `dirSize`, `stageForRead`, `rootOpsEnabled`)
-- `f5f1b2b1`: Complete EN/AR localization in `FileCryptoActivity` & `DexBrowserActivity`, sanitize cached URIs, and harden Zip Slip canonical path check
-- `cc29e3c4`: Fix `SyntaxApplyPolicy` sync (`recordExternalApplied`), default `source.smali` & Plain Text preservation, apply `.mtsx` `.mtcolors` in per-editor `ThemeRegistry`, set `ThemeModel.setDark`, use adaptive `.method` burgundy tint from `WHOLE_BACKGROUND`, and update `dark.json` `keyword.css` to `#E06C75`
+*(No pending commits currently. All commits up to `a36e8ef8` have been built in CI Run `#46103338069`).*
 
 ---
 

@@ -2,6 +2,18 @@
 
 > Completed builds & commits that have been pushed to `origin/test` **and** built/released via GitHub Actions CI.
 
+## Build Run `#46103338069` (`2026-11-28 03:40 UTC`)
+- **Branch:** `test` (Head: `a36e8ef8`)
+- **Included Commits:**
+  - `4340bf70` — `fix(editor): enforce MT-style #443034 method highlight in dark theme and enable custom smali syntax in dex editor`
+  - `1d3b7653` — `fix(editor): include Smali in syntax list and default currentSyntaxIndex to Smali`
+  - `bd6e20e5` — `ci: remove Unit-Test-Report and mapping.txt from workflow artifacts`
+  - `4d39daac` — `fix(privilege): enforce WorkingMode isolation in AccessManager dirSize, staging, and shell helpers`
+  - `f5f1b2b1` — `fix(crypto,dex): complete localization and harden archive extraction path check`
+  - `cc29e3c4` — `fix(editor): fix SyntaxApplyPolicy sync, apply .mtsx colors, and refine MT-style method highlight`
+  - `b448c5b9` — `docs(patch): track pending editor, privilege, crypto localization, and workflow commits`
+  - `a36e8ef8` — `fix(overlay): prevent nextIdent from emitting mp substring to eliminate test flake`
+
 ## Build Run `#46076049032` (`2026-11-27 22:30 UTC`)
 - **Branch:** `test` (Head: `6593ffd5`)
 - **ProGuard Mapping:** `/data/user/0/com.agy/files/.gemini/antigravity-app/scratch/mp_patch/mappings/mapping-release-6593ffd5.txt`
