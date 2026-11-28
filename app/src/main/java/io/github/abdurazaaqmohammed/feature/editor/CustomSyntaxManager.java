@@ -84,11 +84,13 @@ public final class CustomSyntaxManager {
 
         String lowerName = rawName.toLowerCase(Locale.ROOT);
         JSONObject tmGrammar;
+        JSONObject mtColors = null;
         String baseSlug;
 
         if (lowerName.endsWith(".mtsx") || looksLikeMtsx(content)) {
             tmGrammar = convertMtsxToTextMate(content, rawName);
             baseSlug = sanitizeSlug(tmGrammar.optString("name", stripExtension(rawName)));
+            mtColors = extractMtsxThemeColors(content, baseSlug, tmGrammar.getString("scopeName"));
         } else if (lowerName.endsWith(".json") || content.trim().startsWith("{")) {
             tmGrammar = new JSONObject(content);
             if (!tmGrammar.has("scopeName") || (!tmGrammar.has("patterns") && !tmGrammar.has("repository"))) {
@@ -99,9 +101,19 @@ public final class CustomSyntaxManager {
             throw new IllegalArgumentException("Unsupported syntax format. Use .tmLanguage.json or .mtsx");
         }
 
-        File outFile = new File(getSyntaxDir(context), baseSlug + ".tmLanguage.json");
+        File syntaxDir = getSyntaxDir(context);
+        File outFile = new File(syntaxDir, baseSlug + ".tmLanguage.json");
         try (FileOutputStream out = new FileOutputStream(outFile)) {
             out.write(tmGrammar.toString(2).getBytes(StandardCharsets.UTF_8));
+        }
+        File colorFile = new File(syntaxDir, baseSlug + ".mtcolors");
+        if (mtColors != null) {
+            try (FileOutputStream out = new FileOutputStream(colorFile)) {
+                out.write(mtColors.toString(2).getBytes(StandardCharsets.UTF_8));
+            }
+        } else if (colorFile.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            colorFile.delete();
         }
 
         invalidateCache();
@@ -157,6 +169,40 @@ public final class CustomSyntaxManager {
             }
         }
         return null;
+    }
+
+    @NonNull
+    public static Map<String, String> loadThemeColors(
+            @NonNull Context context,
+            @Nullable String scopeName,
+            boolean dark) {
+        if (scopeName == null || scopeName.isEmpty()) return Collections.emptyMap();
+        for (CustomSyntaxInfo info : listCustomSyntaxes(context)) {
+            if (scopeName.equals(info.scopeName) && info.file.isFile()) {
+                String fileName = info.file.getName();
+                String baseName = fileName.endsWith(".tmLanguage.json")
+                        ? fileName.substring(0, fileName.length() - ".tmLanguage.json".length())
+                        : stripExtension(fileName);
+                File colorFile = new File(info.file.getParentFile(), baseName + ".mtcolors");
+                if (!colorFile.isFile()) return Collections.emptyMap();
+                try {
+                    JSONObject root = new JSONObject(readTextFromFile(colorFile));
+                    JSONObject modeObj = root.optJSONObject(dark ? "dark" : "light");
+                    if (modeObj == null) return Collections.emptyMap();
+                    Map<String, String> map = new LinkedHashMap<>();
+                    java.util.Iterator<String> keys = modeObj.keys();
+                    while (keys.hasNext()) {
+                        String k = keys.next();
+                        String v = modeObj.optString(k, "");
+                        if (!v.isEmpty()) map.put(k, v);
+                    }
+                    return map;
+                } catch (Exception ignored) {
+                    return Collections.emptyMap();
+                }
+            }
+        }
+        return Collections.emptyMap();
     }
 
     @Nullable
@@ -399,6 +445,75 @@ public final class CustomSyntaxManager {
         if (c.contains("operator")) return "keyword.operator." + slug;
         if (c.contains("label")) return "entity.name.label." + slug;
         return "entity.name." + c + "." + slug;
+    }
+
+    @Nullable
+    static JSONObject extractMtsxThemeColors(String mtsx, String slug, String scopeName) {
+        try {
+            String clean = stripLineCommentsOutsideStringsAndRegex(mtsx);
+            Matcher colorsM = Pattern.compile("(?m)(?:^|[,\\s])colors\\s*:\\s*\\[").matcher(clean);
+            if (!colorsM.find()) return null;
+            int openIdx = colorsM.end() - 1;
+            int closeIdx = findMatchingBracket(clean, openIdx, '[', ']');
+            if (closeIdx <= openIdx) return null;
+
+            String lineBgKey = null;
+            Matcher lbM = Pattern.compile("\\blineBackground\\s*:\\s*\\{[^}]*\\bcolor\\s*:\\s*\"([^\"]+)\"").matcher(clean);
+            if (lbM.find()) {
+                lineBgKey = lbM.group(1);
+            }
+
+            String body = clean.substring(openIdx + 1, closeIdx);
+            JSONObject lightObj = new JSONObject();
+            JSONObject darkObj = new JSONObject();
+            Matcher tokM = Pattern.compile("\"([^\"]+)\"|#([0-9a-fA-F]{6,8})").matcher(body);
+            String currentKey = null;
+            List<String> currentColors = new ArrayList<>();
+            while (tokM.find()) {
+                if (tokM.group(1) != null) {
+                    recordMtsxColorEntry(currentKey, lineBgKey, currentColors, slug, lightObj, darkObj);
+                    currentKey = tokM.group(1);
+                    currentColors.clear();
+                } else if (currentKey != null) {
+                    String hex = normalizeMtsxHex(tokM.group(2));
+                    if (hex != null) currentColors.add(hex);
+                }
+            }
+            recordMtsxColorEntry(currentKey, lineBgKey, currentColors, slug, lightObj, darkObj);
+            if (lightObj.length() == 0 && darkObj.length() == 0) return null;
+
+            JSONObject root = new JSONObject();
+            root.put("scopeName", scopeName);
+            root.put("light", lightObj);
+            root.put("dark", darkObj);
+            return root;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static void recordMtsxColorEntry(
+            @Nullable String key,
+            @Nullable String lineBgKey,
+            List<String> colors,
+            String slug,
+            JSONObject lightObj,
+            JSONObject darkObj) throws Exception {
+        if (key == null || colors.isEmpty() || key.equals(lineBgKey)) return;
+        String tmScope = mapMtsxColorToTextMateScope(key, slug);
+        String lightHex = colors.get(0);
+        String darkHex = colors.size() >= 2 ? colors.get(1) : lightHex;
+        lightObj.put(tmScope, lightHex);
+        darkObj.put(tmScope, darkHex);
+    }
+
+    @Nullable
+    private static String normalizeMtsxHex(String rawHex) {
+        if (rawHex == null) return null;
+        String upper = rawHex.toUpperCase(Locale.ROOT);
+        if (upper.length() == 6) return "#" + upper;
+        if (upper.length() == 8) return "#" + upper.substring(2) + upper.substring(0, 2);
+        return null;
     }
 
     private static String stripLineCommentsOutsideStringsAndRegex(String text) {

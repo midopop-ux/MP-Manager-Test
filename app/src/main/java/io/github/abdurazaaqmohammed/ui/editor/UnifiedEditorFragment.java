@@ -732,23 +732,40 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
     private void updateEditorUI() {
         if (isSmali) {
             try {
-                ensureLanguageInitialized(requireContext().getApplicationContext());
-                // Per-editor TextMate registry when the pack ships syntax
-                // categories, so pack colors are enforced without touching
-                // the global registry; per-editor scheme likewise.
-                ThemeRegistry editorRegistry = createEditorThemeRegistry(requireContext());
-                String customSmaliScope = io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.findScopeForFileName(requireContext(), "dummy.smali");
-                TextMateLanguage customLang = customSmaliScope != null
-                        ? io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.loadLanguage(requireContext(), customSmaliScope, editorRegistry)
-                        : null;
-                Language language = customLang != null ? customLang : (editorRegistry == null
-                        ? TextMateLanguage.create("source.smali", GrammarRegistry.getInstance(), true)
-                        : TextMateLanguage.create("source.smali", GrammarRegistry.getInstance(), editorRegistry, true));
-                editor.setEditorLanguage(new ColorPreviewLanguageWrapper(new CustomAutoComplete(editor, cachedInstructions, language), editor).setHighlightSmaliMethods(true));
-                editor.setColorScheme(createEditorColorScheme(requireContext(), editorRegistry));
-                applyPackEditorColors();
-                recordAppliedThemeSignature();
-                syntaxPolicy.recordApplied(customSmaliScope != null ? customSmaliScope : "source.smali", language);
+                String targetScope = syntaxPolicy.currentGeneration() > 0
+                        ? syntaxPolicy.requestedScope()
+                        : "source.smali";
+                if (targetScope == null) {
+                    Language plain = new EmptyLanguage();
+                    editor.setEditorLanguage(plain);
+                    lastTextMateRegistry = null;
+                    applySchemePreference();
+                    recordAppliedThemeSignature();
+                    syntaxPolicy.recordExternalApplied(null, plain);
+                } else {
+                    ensureLanguageInitialized(requireContext().getApplicationContext());
+                    // Per-editor TextMate registry when the pack or active
+                    // custom syntax ships colors, so overrides never mutate
+                    // the global registry; per-editor scheme likewise.
+                    ThemeRegistry editorRegistry = createEditorThemeRegistry(requireContext(), targetScope);
+                    TextMateLanguage customLang = io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.loadLanguage(
+                            requireContext(), targetScope, editorRegistry);
+                    Language language = customLang != null ? customLang : (editorRegistry == null
+                            ? TextMateLanguage.create(targetScope, GrammarRegistry.getInstance(), true)
+                            : TextMateLanguage.create(targetScope, GrammarRegistry.getInstance(), editorRegistry, true));
+                    Language innerLang = cachedInstructions != null
+                            ? new CustomAutoComplete(editor, cachedInstructions, language)
+                            : language;
+                    ColorPreviewLanguageWrapper wrapper = new ColorPreviewLanguageWrapper(
+                            innerLang, editor, io.github.abdurazaaqmohammed.feature.editor.StructuredCodeFormatter.forScope(targetScope))
+                            .setHighlightSmaliMethods(targetScope.contains("smali"));
+                    editor.setEditorLanguage(wrapper);
+                    lastTextMateRegistry = editorRegistry;
+                    editor.setColorScheme(createEditorColorScheme(requireContext(), editorRegistry));
+                    applyPackEditorColors();
+                    recordAppliedThemeSignature();
+                    syntaxPolicy.recordExternalApplied(targetScope, wrapper);
+                }
             } catch (Exception e) {
                 Log.e("UnifiedEditor", "Error setting smali language", e);
                 editor.setEditorLanguage(new ColorPreviewLanguageWrapper(new EmptyLanguage(), editor));
@@ -887,16 +904,24 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
      * global registry. Null = keep the plain global registry path.
      */
     private static ThemeRegistry createEditorThemeRegistry(Context context) {
+        return createEditorThemeRegistry(context, null);
+    }
+
+    private static ThemeRegistry createEditorThemeRegistry(Context context, @Nullable String scope) {
         try {
-            org.eclipse.tm4e.core.registry.IThemeSource merged =
-                    ThemePackEditorColors.mergedThemeSource(context);
-            if (merged == null) return null;
             String baseName = ThemePackEditorColors.baseThemeAssetName(context);
+            boolean isDark = baseName.startsWith("dark");
+            java.util.Map<String, String> customColors = scope != null
+                    ? io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.loadThemeColors(context, scope, isDark)
+                    : java.util.Collections.emptyMap();
+            org.eclipse.tm4e.core.registry.IThemeSource merged =
+                    ThemePackEditorColors.mergedThemeSource(context, customColors);
+            if (merged == null) return null;
             io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel model =
                     new io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel(
                             merged, baseName);
             model.load();
-            model.setDark(baseName.startsWith("dark"));
+            model.setDark(isDark);
             ThemeRegistry registry = new ThemeRegistry(); // non-singleton, this editor only
             registry.loadTheme(model);
             registry.setTheme(model);
@@ -1623,10 +1648,9 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
     }
 
     private int currentSyntaxIndex(String[] scopes) {
-        String scope = syntaxPolicy.requestedScope();
-        if (scope == null && isSmali) {
-            scope = "source.smali";
-        }
+        String scope = (syntaxPolicy.currentGeneration() == 0 && isSmali)
+                ? "source.smali"
+                : syntaxPolicy.requestedScope();
         if (scope != null) {
             for (int i = 0; i < scopes.length; i++) {
                 if (scope.equals(scopes[i])) return i;
@@ -1832,7 +1856,7 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
             // ships syntax categories the language reads colors from a
             // per-editor registry seeded with the merged host theme instead
             // of the global one.
-            ThemeRegistry editorRegistry = createEditorThemeRegistry(context);
+            ThemeRegistry editorRegistry = createEditorThemeRegistry(context, scope);
             TextMateLanguage custom = io.github.abdurazaaqmohammed.feature.editor.CustomSyntaxManager.loadLanguage(
                     context, scope, editorRegistry);
             if (custom != null) {
@@ -2358,9 +2382,13 @@ public class UnifiedEditorFragment extends Fragment implements SmaliMethodFieldL
             cachedThemeName = themeName;
             IThemeSource themeSource = null;
             try {
-                themeSource = IThemeSource.fromInputStream(context.getAssets().open( "themes/" + themeName), themeName, null);
-                registry.loadTheme(themeSource);
-                registry.setTheme(themeName);
+                themeSource = IThemeSource.fromInputStream(context.getAssets().open("themes/" + themeName), themeName, null);
+                io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel model =
+                        new io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel(themeSource, themeName);
+                model.load();
+                model.setDark("dark.json".equals(themeName));
+                registry.loadTheme(model);
+                registry.setTheme(model);
             } catch (Exception e) { Log.e("UnifiedEditor", "Theme load error", e); }
             try {
                 cachedSmaliLanguage = TextMateLanguage.create(
